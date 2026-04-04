@@ -329,8 +329,19 @@ export default function Home() {
               {techRouteJobs.length >= 2 && (
                 <button onClick={async () => {
                   setOptimizing(true)
+                  let startLocation = null
                   try {
-                    const res = await fetch('/api/optimize-route', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jobs: techRouteJobs }) })
+                    startLocation = await new Promise((resolve) => {
+                      if (!navigator.geolocation) return resolve(null)
+                      navigator.geolocation.getCurrentPosition(
+                        pos => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+                        () => resolve(null),
+                        { timeout: 8000 }
+                      )
+                    })
+                  } catch (e) {}
+                  try {
+                    const res = await fetch('/api/optimize-route', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jobs: techRouteJobs, startLocation }) })
                     const { order } = await res.json()
                     const reordered = order.map(jobId => techRouteJobs.find(j => j.id === jobId)).filter(Boolean)
                     await Promise.all(reordered.map((job, i) => supabase.from('jobs').update({ route_order: i }).eq('id', job.id)))

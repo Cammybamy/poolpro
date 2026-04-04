@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 
 export async function POST(request) {
-  const { jobs } = await request.json()
+  const { jobs, startLocation } = await request.json()
   if (!jobs || jobs.length < 2) return NextResponse.json({ order: (jobs || []).map(j => j.id) })
 
-  // 1. Geocode all addresses using OpenWeatherMap
+  // 1. Geocode all job addresses using OpenWeatherMap
   const geocoded = await Promise.all(jobs.map(async job => {
     try {
       const res = await fetch(`http://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(job.customers?.address || '')}&limit=1&appid=${process.env.OPENWEATHER_API_KEY}`)
@@ -17,8 +17,14 @@ export async function POST(request) {
   const valid = geocoded.filter(j => j.lat && j.lon)
   if (valid.length < 2) return NextResponse.json({ order: jobs.map(j => j.id) })
 
-  // 2. Get driving time matrix from OSRM (free, no API key needed)
-  const coords = valid.map(j => `${j.lon},${j.lat}`).join(';')
+  // 2. Build coordinate list — prepend tech's current location if provided
+  const hasStart = startLocation?.lat && startLocation?.lon
+  const allPoints = hasStart
+    ? [{ id: '__start__', lat: startLocation.lat, lon: startLocation.lon }, ...valid]
+    : valid
+
+  // 3. Get driving time matrix from OSRM (free, no API key needed)
+  const coords = allPoints.map(p => `${p.lon},${p.lat}`).join(';')
   let matrix = null
   try {
     const osrmRes = await fetch(`https://router.project-osrm.org/table/v1/driving/${coords}?annotations=duration`)
@@ -28,8 +34,7 @@ export async function POST(request) {
 
   // Fallback: Haversine straight-line distance if OSRM fails
   if (!matrix) {
-    matrix = valid.map((a, i) => valid.map((b, j) => {
-      if (i === j) return 0
+    matrix = allPoints.map((a) => allPoints.map((b) => {
       const R = 3958.8
       const dLat = (b.lat - a.lat) * Math.PI / 180
       const dLon = (b.lon - a.lon) * Math.PI / 180
@@ -38,8 +43,8 @@ export async function POST(request) {
     }))
   }
 
-  // 3. Nearest neighbor algorithm starting from first job
-  const n = valid.length
+  // 4. Nearest neighbor — start from index 0 (tech location or first job)
+  const n = allPoints.length
   const visited = new Array(n).fill(false)
   const order = [0]
   visited[0] = true
@@ -58,9 +63,9 @@ export async function POST(request) {
     visited[nearest] = true
   }
 
-  const optimizedIds = order.map(i => valid[i].id)
-
-  // Include any jobs that failed geocoding at the end
+  // Skip index 0 if it was the tech's start location (not a real job)
+  const jobOrder = hasStart ? order.slice(1) : order
+  const optimizedIds = jobOrder.map(i => allPoints[i].id)
   const failedIds = geocoded.filter(j => !j.lat).map(j => j.id)
 
   return NextResponse.json({ order: [...optimizedIds, ...failedIds] })

@@ -169,7 +169,7 @@ export default function Home() {
   }
 
   async function fetchChemicals() {
-    const { data } = await supabase.from('chemical_logs').select('*, customers(name)').order('created_at', { ascending: false })
+    const { data } = await supabase.from('chemical_logs').select('*, customers(name), jobs(technician), chemical_treatments(*)').order('created_at', { ascending: false })
     setChemLogs(data || [])
   }
 
@@ -549,11 +549,14 @@ export default function Home() {
             <div className="space-y-3">
               {chemLogs.map(log => (
                 <div key={log.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-                  <div className="flex justify-between items-center mb-2">
+                  <div className="flex justify-between items-center mb-1">
                     <div className="font-semibold text-gray-800">{log.customers?.name}</div>
                     <div className="text-gray-400 text-sm">{new Date(log.created_at).toLocaleDateString()}</div>
                   </div>
-                  <div className="grid grid-cols-3 gap-2 text-center">
+                  {log.jobs?.technician && (
+                    <div className="text-xs text-blue-500 mb-2">Tech: {log.jobs.technician}</div>
+                  )}
+                  <div className="grid grid-cols-3 gap-2 text-center mb-2">
                     <div className="bg-blue-50 rounded-lg p-2">
                       <div className="text-xs text-gray-400">Chlorine</div>
                       <div className="font-semibold text-gray-800">{log.chlorine ?? '-'}</div>
@@ -567,7 +570,18 @@ export default function Home() {
                       <div className="font-semibold text-gray-800">{log.alkalinity ?? '-'}</div>
                     </div>
                   </div>
-                  {log.notes && <p className="text-gray-500 text-sm mt-2">{log.notes}</p>}
+                  {log.chemical_treatments?.length > 0 && (
+                    <div className="bg-blue-50 rounded-lg p-2 mb-2">
+                      <div className="text-xs text-gray-400 mb-1">Chemicals Added</div>
+                      {log.chemical_treatments.map(t => (
+                        <div key={t.id} className="text-xs text-gray-700 flex justify-between">
+                          <span>{t.product}</span>
+                          {t.amount && <span className="text-gray-500">{t.amount} {t.unit}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {log.notes && <p className="text-gray-500 text-sm">{log.notes}</p>}
                 </div>
               ))}
               {chemLogs.length === 0 && <p className="text-center text-gray-400 mt-8">No chemical logs yet</p>}

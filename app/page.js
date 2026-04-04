@@ -37,6 +37,9 @@ export default function Home() {
   const [routeDate, setRouteDate] = useState(new Date().toISOString().split('T')[0])
   const [routeJobs, setRouteJobs] = useState([])
 
+  // Revenue forecast
+  const [forecast, setForecast] = useState(0)
+
   // Chemicals
   const [chemLogs, setChemLogs] = useState([])
 
@@ -109,7 +112,7 @@ export default function Home() {
 
   async function fetchDashboard() {
     const today = new Date().toISOString().split('T')[0]
-    const [cRes, tRes, uRes, pRes, tjRes, uiRes, mrRes] = await Promise.all([
+    const [cRes, tRes, uRes, pRes, tjRes, uiRes, mrRes, fcRes] = await Promise.all([
       supabase.from('customers').select('id', { count: 'exact', head: true }),
       supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('scheduled_date', today),
       supabase.from('invoices').select('id', { count: 'exact', head: true }).eq('status', 'unpaid'),
@@ -117,11 +120,14 @@ export default function Home() {
       supabase.from('jobs').select('*, customers(name, address)').eq('scheduled_date', today).order('route_order'),
       supabase.from('invoices').select('*, customers(name)').eq('status', 'unpaid').order('due_date').limit(5),
       supabase.from('monthly_revenue').select('*').limit(6),
+      supabase.from('customers').select('monthly_rate'),
     ])
     setStats({ customers: cRes.count || 0, todayJobs: tRes.count || 0, unpaidInvoices: uRes.count || 0, pendingJobs: pRes.count || 0 })
     setTodayJobs(tjRes.data || [])
     setUnpaidInvoices(uiRes.data || [])
     setMonthlyRevenue(mrRes.data || [])
+    const total = (fcRes.data || []).reduce((sum, c) => sum + (parseFloat(c.monthly_rate) || 0), 0)
+    setForecast(total)
   }
 
   async function fetchCustomers() {
@@ -367,7 +373,13 @@ export default function Home() {
               </div>
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
-              <h3 className="font-semibold text-gray-700 mb-3">Revenue — Last 6 Months</h3>
+              <div className="flex justify-between items-start mb-3">
+                <h3 className="font-semibold text-gray-700">Revenue — Last 6 Months</h3>
+                <div className="text-right">
+                  <div className="text-xs text-gray-400">Monthly Forecast</div>
+                  <div className="text-lg font-bold text-green-600">${forecast.toFixed(2)}</div>
+                </div>
+              </div>
               {monthlyRevenue.length === 0 && <p className="text-gray-400 text-sm">No invoice data yet</p>}
               <div className="space-y-2">
                 {monthlyRevenue.map((row, i) => {

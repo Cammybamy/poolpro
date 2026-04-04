@@ -31,6 +31,8 @@ export default function JobDetail({ params }) {
   const [treatments, setTreatments] = useState([{ product: '', amount: '', unit: 'lbs' }])
   const [savedLogs, setSavedLogs] = useState([])
   const [saved, setSaved] = useState(false)
+  const [aiAnalysis, setAiAnalysis] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
 
   useEffect(() => {
     fetchJob()
@@ -39,7 +41,7 @@ export default function JobDetail({ params }) {
   }, [])
 
   async function fetchJob() {
-    const { data } = await supabase.from('jobs').select('*, customers(name, address, phone, service_frequency)').eq('id', id).single()
+    const { data } = await supabase.from('jobs').select('*, customers(name, address, phone, service_frequency, pool_size_gallons, pool_type, filter_type)').eq('id', id).single()
     setJob(data)
     setCustomer(data.customers)
     setForm(data)
@@ -126,6 +128,27 @@ export default function JobDetail({ params }) {
     setSaved(true)
     fetchLogs()
     setTimeout(() => setSaved(false), 3000)
+
+    // AI analysis
+    setAiLoading(true)
+    setAiAnalysis('')
+    try {
+      const res = await fetch('/api/analyze-chemicals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          readings: { chlorine: readings.chlorine, ph: readings.ph, alkalinity: readings.alkalinity },
+          address: customer?.address,
+          history: savedLogs.slice(0, 4),
+          pool: { pool_size_gallons: customer?.pool_size_gallons, pool_type: customer?.pool_type, filter_type: customer?.filter_type }
+        })
+      })
+      const data = await res.json()
+      setAiAnalysis(data.analysis)
+    } catch (e) {
+      setAiAnalysis('AI analysis unavailable.')
+    }
+    setAiLoading(false)
   }
 
   if (!job) return <div className="p-6 text-gray-500">Loading...</div>
@@ -220,6 +243,19 @@ export default function JobDetail({ params }) {
 
         {saved && (
           <div className="bg-green-50 text-green-700 text-center rounded-xl p-3 font-semibold text-sm">Chemical log saved!</div>
+        )}
+
+        {aiLoading && (
+          <div className="bg-purple-50 rounded-xl p-4 text-center text-purple-500 text-sm font-medium">AI is analyzing readings...</div>
+        )}
+
+        {aiAnalysis && !aiLoading && (
+          <div className="bg-white rounded-xl shadow p-4 border-l-4 border-purple-400">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-purple-600 font-bold text-sm">AI Analysis</span>
+            </div>
+            <div className="text-gray-700 text-sm whitespace-pre-line">{aiAnalysis}</div>
+          </div>
         )}
 
         {savedLogs.length > 0 && (

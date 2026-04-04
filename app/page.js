@@ -4,6 +4,9 @@ import { supabase } from '../lib/supabase'
 import { getProfile } from '../lib/profile'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import dynamic from 'next/dynamic'
+
+const RouteMap = dynamic(() => import('./components/RouteMap'), { ssr: false })
 
 export default function Home() {
   const router = useRouter()
@@ -18,13 +21,14 @@ export default function Home() {
 
   // Customers
   const [customers, setCustomers] = useState([])
-  const [customerForm, setCustomerForm] = useState({ name: '', address: '', phone: '', email: '', notes: '' })
+  const [customerForm, setCustomerForm] = useState({ name: '', address: '', phone: '', email: '', notes: '', service_frequency: 'none', monthly_rate: '', pool_size_gallons: '', pool_type: '', filter_type: '', equipment_brand: '', equipment_notes: '' })
   const [showCustomerForm, setShowCustomerForm] = useState(false)
 
   // Jobs
   const [jobs, setJobs] = useState([])
   const [jobForm, setJobForm] = useState({ customer_id: '', scheduled_date: '', technician: '', notes: '', status: 'pending' })
   const [showJobForm, setShowJobForm] = useState(false)
+  const [technicians, setTechnicians] = useState([])
 
   // Route
   const [routeDate, setRouteDate] = useState(new Date().toISOString().split('T')[0])
@@ -36,6 +40,18 @@ export default function Home() {
   // Invoices
   const [invoices, setInvoices] = useState([])
 
+  // Reports
+  const [reportCustomers, setReportCustomers] = useState([])
+  const [selectedReportCustomer, setSelectedReportCustomer] = useState('')
+  const [reportLogs, setReportLogs] = useState([])
+
+  // Tech
+  const [techTab, setTechTab] = useState('jobs')
+  const [techTodayJobs, setTechTodayJobs] = useState([])
+  const [techUpcomingJobs, setTechUpcomingJobs] = useState([])
+  const [techRouteDate, setTechRouteDate] = useState(new Date().toISOString().split('T')[0])
+  const [techRouteJobs, setTechRouteJobs] = useState([])
+
   useEffect(() => {
     loadProfile()
   }, [])
@@ -44,10 +60,11 @@ export default function Home() {
     if (!profile) return
     if (activeTab === 'dashboard') fetchDashboard()
     if (activeTab === 'customers') fetchCustomers()
-    if (activeTab === 'jobs') { fetchJobs(); fetchCustomers() }
+    if (activeTab === 'jobs') { fetchJobs(); fetchCustomers(); fetchTechnicians() }
     if (activeTab === 'route') fetchRouteJobs(routeDate)
     if (activeTab === 'chemicals') fetchChemicals()
     if (activeTab === 'invoices') fetchInvoices()
+    if (activeTab === 'reports') fetchReportCustomers()
   }, [activeTab, profile])
 
   useEffect(() => {
@@ -57,6 +74,34 @@ export default function Home() {
   async function loadProfile() {
     const p = await getProfile()
     setProfile(p)
+    if (p?.role === 'technician') {
+      fetchTechJobs(p.full_name)
+      fetchTechRoute(p.full_name, new Date().toISOString().split('T')[0])
+    }
+  }
+
+  async function fetchTechJobs(name) {
+    const today = new Date().toISOString().split('T')[0]
+    const { data } = await supabase
+      .from('jobs')
+      .select('*, customers(name, address, phone)')
+      .eq('technician', name)
+      .neq('status', 'complete')
+      .order('scheduled_date', { ascending: true })
+    const todayList = (data || []).filter(j => j.scheduled_date === today)
+    const upcoming = (data || []).filter(j => j.scheduled_date > today)
+    setTechTodayJobs(todayList)
+    setTechUpcomingJobs(upcoming)
+  }
+
+  async function fetchTechRoute(name, date) {
+    const { data } = await supabase
+      .from('jobs')
+      .select('*, customers(name, address, phone)')
+      .eq('technician', name)
+      .eq('scheduled_date', date)
+      .order('route_order', { ascending: true })
+    setTechRouteJobs(data || [])
   }
 
   async function fetchDashboard() {
@@ -87,6 +132,11 @@ export default function Home() {
     setCustomerForm({ name: '', address: '', phone: '', email: '', notes: '' })
     setShowCustomerForm(false)
     fetchCustomers()
+  }
+
+  async function fetchTechnicians() {
+    const { data } = await supabase.from('profiles').select('id, full_name').eq('role', 'technician').order('full_name')
+    setTechnicians(data || [])
   }
 
   async function fetchJobs() {
@@ -123,6 +173,20 @@ export default function Home() {
     setChemLogs(data || [])
   }
 
+  async function fetchReportCustomers() {
+    const { data } = await supabase.from('customers').select('id, name').order('name')
+    setReportCustomers(data || [])
+  }
+
+  async function fetchReportLogs(customerId) {
+    const { data } = await supabase
+      .from('chemical_logs')
+      .select('*')
+      .eq('customer_id', customerId)
+      .order('created_at', { ascending: true })
+    setReportLogs(data || [])
+  }
+
   async function fetchInvoices() {
     const { data } = await supabase.from('invoices').select('*, customers(name)').order('created_at', { ascending: false })
     setInvoices(data || [])
@@ -140,23 +204,84 @@ export default function Home() {
 
   if (isTech) {
     return (
-      <div className="min-h-screen bg-gray-100">
-        <div className="bg-blue-600 text-white p-6 flex justify-between items-start">
+      <div className="min-h-screen bg-gray-50">
+        <nav className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-10">
           <div>
-            <h1 className="text-2xl font-bold">PoolPro</h1>
-            <p className="text-blue-200 text-sm mt-1">Welcome, {profile.full_name}</p>
+            <span className="text-blue-600 font-bold text-lg">PoolPro</span>
+            <div className="text-xs text-gray-400">{profile.full_name} · Technician</div>
           </div>
-          <button onClick={handleSignOut} className="text-blue-200 text-sm hover:text-white">Sign Out</button>
-        </div>
-        <div className="p-4 grid grid-cols-1 gap-4 max-w-lg mx-auto mt-4">
-          <Link href="/my-jobs" className="bg-white rounded-xl shadow p-6 text-center hover:shadow-md transition">
-            <div className="text-4xl mb-2">🔧</div>
-            <div className="font-semibold text-gray-700">My Jobs</div>
-          </Link>
-          <Link href="/route" className="bg-blue-50 rounded-xl shadow p-6 text-center hover:shadow-md transition">
-            <div className="text-4xl mb-2">🗺️</div>
-            <div className="font-semibold text-gray-700">Daily Route</div>
-          </Link>
+          <div className="flex items-center gap-1">
+            <button onClick={() => setTechTab('jobs')} className={`px-3 py-1.5 text-sm rounded-lg transition ${techTab === 'jobs' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50'}`}>My Jobs</button>
+            <button onClick={() => { setTechTab('route'); fetchTechRoute(profile.full_name, techRouteDate) }} className={`px-3 py-1.5 text-sm rounded-lg transition ${techTab === 'route' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50'}`}>Route</button>
+          </div>
+          <button onClick={handleSignOut} className="text-sm text-gray-400 hover:text-gray-600">Sign Out</button>
+        </nav>
+
+        <div className="max-w-lg mx-auto p-4">
+          {techTab === 'jobs' && (
+            <div>
+              <div className="mb-2">
+                <p className="text-gray-400 text-sm">{today}</p>
+              </div>
+
+              <h3 className="font-semibold text-gray-700 mb-2 mt-4">Today</h3>
+              {techTodayJobs.length === 0 && <p className="text-gray-400 text-sm mb-4">No jobs today</p>}
+              <div className="space-y-2 mb-6">
+                {techTodayJobs.map(job => (
+                  <Link href={`/my-jobs/${job.id}`} key={job.id} className="block bg-white rounded-xl shadow-sm border border-blue-100 p-4 hover:shadow-md transition">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="font-semibold text-gray-800">{job.customers?.name}</div>
+                        <div className="text-gray-500 text-sm">{job.customers?.address}</div>
+                        <div className="text-gray-400 text-sm">{job.customers?.phone}</div>
+                      </div>
+                      <span className={job.status === 'complete' ? 'text-xs px-2 py-1 rounded-full bg-green-100 text-green-700' : 'text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700'}>{job.status}</span>
+                    </div>
+                    {job.notes && <p className="text-gray-500 text-sm mt-2 bg-blue-50 rounded-lg p-2">{job.notes}</p>}
+                  </Link>
+                ))}
+              </div>
+
+              <h3 className="font-semibold text-gray-700 mb-2">Upcoming</h3>
+              {techUpcomingJobs.length === 0 && <p className="text-gray-400 text-sm">No upcoming jobs</p>}
+              <div className="space-y-2">
+                {techUpcomingJobs.map(job => (
+                  <Link href={`/my-jobs/${job.id}`} key={job.id} className="block bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="font-semibold text-gray-800">{job.customers?.name}</div>
+                        <div className="text-gray-500 text-sm">{job.customers?.address}</div>
+                        <div className="text-blue-400 text-xs mt-1">{new Date(job.scheduled_date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</div>
+                      </div>
+                      <span className={job.status === 'complete' ? 'text-xs px-2 py-1 rounded-full bg-green-100 text-green-700' : 'text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700'}>{job.status}</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {techTab === 'route' && (
+            <div>
+              <h2 className="text-xl font-bold text-gray-800 mb-3">My Route</h2>
+              <input
+                type="date"
+                className="w-full border rounded-xl p-3 text-gray-800 bg-white shadow-sm mb-4"
+                value={techRouteDate}
+                onChange={e => { setTechRouteDate(e.target.value); fetchTechRoute(profile.full_name, e.target.value) }}
+              />
+              {techRouteJobs.length === 0
+                ? <p className="text-center text-gray-400 mt-8">No jobs on this day</p>
+                : <RouteMap
+                    jobs={techRouteJobs}
+                    onReorder={async (newJobs) => {
+                      setTechRouteJobs(newJobs)
+                      await Promise.all(newJobs.map((job, i) => supabase.from('jobs').update({ route_order: i }).eq('id', job.id)))
+                    }}
+                  />
+              }
+            </div>
+          )}
         </div>
       </div>
     )
@@ -169,6 +294,7 @@ export default function Home() {
     { id: 'route', label: 'Route' },
     { id: 'chemicals', label: 'Chemicals' },
     { id: 'invoices', label: 'Invoices' },
+    { id: 'reports', label: 'Reports' },
     ...(profile.role === 'owner' ? [{ id: 'users', label: 'Users' }] : []),
   ]
 
@@ -295,7 +421,49 @@ export default function Home() {
                 <input className="w-full border rounded-lg p-2 text-gray-800 bg-white" placeholder="Address" value={customerForm.address} onChange={e => setCustomerForm({...customerForm, address: e.target.value})} />
                 <input className="w-full border rounded-lg p-2 text-gray-800 bg-white" placeholder="Phone" value={customerForm.phone} onChange={e => setCustomerForm({...customerForm, phone: e.target.value})} />
                 <input className="w-full border rounded-lg p-2 text-gray-800 bg-white" placeholder="Email" value={customerForm.email} onChange={e => setCustomerForm({...customerForm, email: e.target.value})} />
-                <textarea className="w-full border rounded-lg p-2 text-gray-800 bg-white" placeholder="Notes" value={customerForm.notes} onChange={e => setCustomerForm({...customerForm, notes: e.target.value})} />
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-gray-500 text-xs block mb-1">Monthly Rate ($)</label>
+                    <input type="number" className="w-full border rounded-lg p-2 text-gray-800 bg-white" placeholder="0.00" value={customerForm.monthly_rate || ''} onChange={e => setCustomerForm({...customerForm, monthly_rate: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="text-gray-500 text-xs block mb-1">Pool Size (gallons)</label>
+                    <input type="number" className="w-full border rounded-lg p-2 text-gray-800 bg-white" placeholder="e.g. 15000" value={customerForm.pool_size_gallons || ''} onChange={e => setCustomerForm({...customerForm, pool_size_gallons: e.target.value})} />
+                  </div>
+                </div>
+
+                <select className="w-full border rounded-lg p-2 text-gray-800 bg-white" value={customerForm.service_frequency || 'none'} onChange={e => setCustomerForm({...customerForm, service_frequency: e.target.value})}>
+                  <option value="none">No recurring schedule</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="biweekly">Biweekly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+
+                <select className="w-full border rounded-lg p-2 text-gray-800 bg-white" value={customerForm.pool_type || ''} onChange={e => setCustomerForm({...customerForm, pool_type: e.target.value})}>
+                  <option value="">Select pool type</option>
+                  <option value="Gunite">Gunite</option>
+                  <option value="Fiberglass">Fiberglass</option>
+                  <option value="Vinyl">Vinyl</option>
+                </select>
+
+                <select className="w-full border rounded-lg p-2 text-gray-800 bg-white" value={customerForm.filter_type || ''} onChange={e => setCustomerForm({...customerForm, filter_type: e.target.value})}>
+                  <option value="">Select filter type</option>
+                  <option value="DE">DE Filter</option>
+                  <option value="Cartridge">Cartridge Filter</option>
+                  <option value="Sand">Sand Filter</option>
+                </select>
+
+                <select className="w-full border rounded-lg p-2 text-gray-800 bg-white" value={customerForm.equipment_brand || ''} onChange={e => setCustomerForm({...customerForm, equipment_brand: e.target.value})}>
+                  <option value="">Select equipment brand</option>
+                  <option value="Pentair">Pentair</option>
+                  <option value="Jandy">Jandy</option>
+                  <option value="Hayward">Hayward</option>
+                  <option value="Other">Other</option>
+                </select>
+
+                <textarea className="w-full border rounded-lg p-2 text-gray-800 bg-white" placeholder="Equipment / Area Notes (trees, debris, quirks...)" value={customerForm.equipment_notes || ''} onChange={e => setCustomerForm({...customerForm, equipment_notes: e.target.value})} />
+                <textarea className="w-full border rounded-lg p-2 text-gray-800 bg-white" placeholder="General Notes" value={customerForm.notes || ''} onChange={e => setCustomerForm({...customerForm, notes: e.target.value})} />
                 <button onClick={addCustomer} className="w-full bg-green-500 text-white py-2 rounded-lg font-semibold">Save Customer</button>
               </div>
             )}
@@ -327,7 +495,10 @@ export default function Home() {
                   {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
                 <input type="date" className="w-full border rounded-lg p-2 text-gray-800 bg-white" value={jobForm.scheduled_date} onChange={e => setJobForm({...jobForm, scheduled_date: e.target.value})} />
-                <input className="w-full border rounded-lg p-2 text-gray-800 bg-white" placeholder="Technician" value={jobForm.technician} onChange={e => setJobForm({...jobForm, technician: e.target.value})} />
+                <select className="w-full border rounded-lg p-2 text-gray-800 bg-white" value={jobForm.technician} onChange={e => setJobForm({...jobForm, technician: e.target.value})}>
+                  <option value="">Unassigned</option>
+                  {technicians.map(t => <option key={t.id} value={t.full_name}>{t.full_name}</option>)}
+                </select>
                 <textarea className="w-full border rounded-lg p-2 text-gray-800 bg-white" placeholder="Notes" value={jobForm.notes} onChange={e => setJobForm({...jobForm, notes: e.target.value})} />
                 <button onClick={addJob} className="w-full bg-green-500 text-white py-2 rounded-lg font-semibold">Save Job</button>
               </div>
@@ -422,6 +593,77 @@ export default function Home() {
               ))}
               {invoices.length === 0 && <p className="text-center text-gray-400 mt-8">No invoices yet</p>}
             </div>
+          </div>
+        )}
+
+        {activeTab === 'reports' && (
+          <div>
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Chemical Reports</h2>
+
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
+              <label className="text-gray-500 text-sm block mb-2">Select Customer</label>
+              <select
+                className="w-full border rounded-lg p-2 text-gray-800 bg-white"
+                value={selectedReportCustomer}
+                onChange={e => { setSelectedReportCustomer(e.target.value); fetchReportLogs(e.target.value) }}
+              >
+                <option value="">Choose a customer...</option>
+                {reportCustomers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+
+            {selectedReportCustomer && reportLogs.length === 0 && (
+              <p className="text-center text-gray-400 mt-8">No chemical logs for this customer yet</p>
+            )}
+
+            {reportLogs.length > 0 && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-3">
+                  {['chlorine', 'ph', 'alkalinity'].map(metric => {
+                    const values = reportLogs.map(l => l[metric]).filter(v => v !== null)
+                    const avg = values.length ? (values.reduce((a, b) => a + b, 0) / values.length).toFixed(2) : '—'
+                    const latest = reportLogs[reportLogs.length - 1]?.[metric] ?? '—'
+                    const colors = { chlorine: 'blue', ph: 'green', alkalinity: 'yellow' }
+                    const c = colors[metric]
+                    return (
+                      <div key={metric} className={`bg-${c}-50 rounded-xl p-3 text-center`}>
+                        <div className="text-xs text-gray-400 capitalize mb-1">{metric}</div>
+                        <div className="text-xl font-bold text-gray-800">{latest}</div>
+                        <div className="text-xs text-gray-400">avg {avg}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                  <h3 className="font-semibold text-gray-700 mb-3">History</h3>
+                  <div className="space-y-2">
+                    {[...reportLogs].reverse().map(log => (
+                      <div key={log.id} className="border rounded-lg p-3">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-sm font-medium text-gray-700">{new Date(log.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-center text-sm">
+                          <div>
+                            <div className="text-xs text-gray-400">Chlorine</div>
+                            <div className="font-semibold text-gray-800">{log.chlorine ?? '—'}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-gray-400">pH</div>
+                            <div className="font-semibold text-gray-800">{log.ph ?? '—'}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-gray-400">Alkalinity</div>
+                            <div className="font-semibold text-gray-800">{log.alkalinity ?? '—'}</div>
+                          </div>
+                        </div>
+                        {log.notes && <p className="text-gray-400 text-xs mt-2">{log.notes}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

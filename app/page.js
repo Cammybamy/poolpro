@@ -335,6 +335,7 @@ export default function Home() {
                 onChange={e => { setTechRouteDate(e.target.value); fetchTechRoute(profile.full_name, e.target.value) }}
               />
               {techRouteJobs.length >= 2 && (
+                <>
                 <button onClick={async () => {
                   setOptimizing(true)
                   let startLocation = null
@@ -362,6 +363,7 @@ export default function Home() {
                   setOptimizing(false)
                 }} disabled={optimizing} className="w-full mb-2 bg-purple-600 text-white py-3 rounded-xl font-semibold text-sm">{optimizing ? 'Optimizing route...' : 'Optimize Route with AI'}</button>
                 {optimizeError && <p className="text-red-500 text-sm text-center mb-3">{optimizeError}</p>}
+                </>
               )}
               {techRouteJobs.length === 0
                 ? <p className="text-center text-gray-400 mt-8">No jobs on this day</p>

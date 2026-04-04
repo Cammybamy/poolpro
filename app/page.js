@@ -651,34 +651,26 @@ export default function Home() {
             )}
             {optimizeError && <p className="text-red-500 text-sm text-center mb-3">{optimizeError}</p>}
             {routeJobs.length === 0 && <p className="text-center text-gray-400 mt-8">No jobs scheduled for this day</p>}
-            <div className="space-y-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
               {routeJobs.map((job, index) => (
-                <div key={job.id}>
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex items-center gap-3">
-                    <div className="flex flex-col gap-1">
-                      <button onClick={() => moveJob(index, -1)} className="text-gray-400 hover:text-blue-600 text-lg leading-none">▲</button>
-                      <button onClick={() => moveJob(index, 1)} className="text-gray-400 hover:text-blue-600 text-lg leading-none">▼</button>
-                    </div>
-                    <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">{index + 1}</div>
-                    <div className="flex-1">
-                      <Link href={`/jobs/${job.id}`} className="font-semibold text-gray-800 hover:text-blue-600">{job.customers?.name}</Link>
-                      <div className="text-gray-500 text-sm">{job.customers?.address}</div>
-                      {job.technician && <div className="text-gray-400 text-xs">Tech: {job.technician}</div>}
-                    </div>
-                    <span className={job.status === 'complete' ? 'text-xs px-2 py-1 rounded-full bg-green-100 text-green-700' : 'text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700'}>{job.status}</span>
+                <div key={job.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 flex items-center gap-3">
+                  <div className="flex flex-col gap-0.5">
+                    <button onClick={() => moveJob(index, -1)} className="text-gray-400 hover:text-blue-600 text-base leading-none">▲</button>
+                    <button onClick={() => moveJob(index, 1)} className="text-gray-400 hover:text-blue-600 text-base leading-none">▼</button>
                   </div>
-                  {routeDriveTimes[index] != null && index < routeJobs.length - 1 && (
-                    <div className="flex items-center gap-3 px-3 py-1.5">
-                      <div className="flex flex-col items-center gap-0.5 ml-11">
-                        <div className="w-0.5 h-2 bg-blue-300"></div>
-                        <div className="w-0.5 h-2 bg-blue-300"></div>
+                  <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">{index + 1}</div>
+                  <div className="flex-1 min-w-0">
+                    <Link href={`/jobs/${job.id}`} className="font-semibold text-gray-800 hover:text-blue-600 text-sm block truncate">{job.customers?.name}</Link>
+                    <div className="text-gray-500 text-xs truncate">{job.customers?.address}</div>
+                    {job.technician && <div className="text-gray-400 text-xs truncate">Tech: {job.technician}</div>}
+                    {routeDriveTimes[index] != null && index < routeJobs.length - 1 && (
+                      <div className="mt-1 flex items-center gap-1">
+                        <span className="text-blue-400 text-xs">🚗</span>
+                        <span className="text-blue-600 text-xs font-medium">{routeDriveTimes[index]} min to next</span>
                       </div>
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5 flex items-center gap-2">
-                        <span className="text-blue-400 text-sm">🚗</span>
-                        <span className="text-blue-700 font-semibold text-sm">{routeDriveTimes[index]} min drive</span>
-                      </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
+                  <span className={job.status === 'complete' ? 'text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 flex-shrink-0' : 'text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 flex-shrink-0'}>{job.status}</span>
                 </div>
               ))}
             </div>

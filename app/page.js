@@ -181,7 +181,7 @@ export default function Home() {
   async function fetchReportLogs(customerId) {
     const { data } = await supabase
       .from('chemical_logs')
-      .select('*')
+      .select('*, chemical_treatments(*)')
       .eq('customer_id', customerId)
       .order('created_at', { ascending: true })
     setReportLogs(data || [])
@@ -643,7 +643,7 @@ export default function Home() {
                         <div className="flex justify-between items-center mb-2">
                           <span className="text-sm font-medium text-gray-700">{new Date(log.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                         </div>
-                        <div className="grid grid-cols-3 gap-2 text-center text-sm">
+                        <div className="grid grid-cols-3 gap-2 text-center text-sm mb-2">
                           <div>
                             <div className="text-xs text-gray-400">Chlorine</div>
                             <div className="font-semibold text-gray-800">{log.chlorine ?? '—'}</div>
@@ -657,6 +657,19 @@ export default function Home() {
                             <div className="font-semibold text-gray-800">{log.alkalinity ?? '—'}</div>
                           </div>
                         </div>
+                        {log.chemical_treatments?.length > 0 && (
+                          <div className="bg-blue-50 rounded-lg p-2 mt-2">
+                            <div className="text-xs text-gray-400 mb-1">Chemicals Added</div>
+                            <div className="space-y-1">
+                              {log.chemical_treatments.map(t => (
+                                <div key={t.id} className="text-xs text-gray-700 flex justify-between">
+                                  <span>{t.product}</span>
+                                  {t.amount && <span className="text-gray-500">{t.amount} {t.unit}</span>}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                         {log.notes && <p className="text-gray-400 text-xs mt-2">{log.notes}</p>}
                       </div>
                     ))}

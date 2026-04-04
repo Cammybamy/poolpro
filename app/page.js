@@ -36,6 +36,7 @@ export default function Home() {
   // Route
   const [routeDate, setRouteDate] = useState(new Date().toISOString().split('T')[0])
   const [routeJobs, setRouteJobs] = useState([])
+  const [optimizing, setOptimizing] = useState(false)
 
   // Revenue forecast
   const [forecast, setForecast] = useState(0)
@@ -183,6 +184,23 @@ export default function Home() {
     setRouteJobs(data || [])
   }
 
+  async function optimizeRoute() {
+    if (routeJobs.length < 2) return
+    setOptimizing(true)
+    try {
+      const res = await fetch('/api/optimize-route', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobs: routeJobs })
+      })
+      const { order } = await res.json()
+      const reordered = order.map(jobId => routeJobs.find(j => j.id === jobId)).filter(Boolean)
+      await Promise.all(reordered.map((job, i) => supabase.from('jobs').update({ route_order: i }).eq('id', job.id)))
+      setRouteJobs(reordered)
+    } catch (e) {}
+    setOptimizing(false)
+  }
+
   async function moveJob(index, direction) {
     const newJobs = [...routeJobs]
     const swapIndex = index + direction
@@ -292,10 +310,23 @@ export default function Home() {
               <h2 className="text-xl font-bold text-gray-800 mb-3">My Route</h2>
               <input
                 type="date"
-                className="w-full border rounded-xl p-3 text-gray-800 bg-white shadow-sm mb-4"
+                className="w-full border rounded-xl p-3 text-gray-800 bg-white shadow-sm mb-3"
                 value={techRouteDate}
                 onChange={e => { setTechRouteDate(e.target.value); fetchTechRoute(profile.full_name, e.target.value) }}
               />
+              {techRouteJobs.length >= 2 && (
+                <button onClick={async () => {
+                  setOptimizing(true)
+                  try {
+                    const res = await fetch('/api/optimize-route', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jobs: techRouteJobs }) })
+                    const { order } = await res.json()
+                    const reordered = order.map(jobId => techRouteJobs.find(j => j.id === jobId)).filter(Boolean)
+                    await Promise.all(reordered.map((job, i) => supabase.from('jobs').update({ route_order: i }).eq('id', job.id)))
+                    setTechRouteJobs(reordered)
+                  } catch (e) {}
+                  setOptimizing(false)
+                }} disabled={optimizing} className="w-full mb-4 bg-purple-600 text-white py-3 rounded-xl font-semibold text-sm">{optimizing ? 'Optimizing route...' : 'Optimize Route with AI'}</button>
+              )}
               {techRouteJobs.length === 0
                 ? <p className="text-center text-gray-400 mt-8">No jobs on this day</p>
                 : <RouteMap
@@ -571,7 +602,10 @@ export default function Home() {
         {activeTab === 'route' && (
           <div>
             <h2 className="text-xl font-bold text-gray-800 mb-4">Daily Route</h2>
-            <input type="date" className="w-full border rounded-xl p-3 text-gray-800 bg-white shadow-sm mb-4" value={routeDate} onChange={e => setRouteDate(e.target.value)} />
+            <input type="date" className="w-full border rounded-xl p-3 text-gray-800 bg-white shadow-sm mb-3" value={routeDate} onChange={e => setRouteDate(e.target.value)} />
+            {routeJobs.length >= 2 && (
+              <button onClick={optimizeRoute} disabled={optimizing} className="w-full mb-4 bg-purple-600 text-white py-3 rounded-xl font-semibold text-sm">{optimizing ? 'Optimizing route...' : 'Optimize Route with AI'}</button>
+            )}
             {routeJobs.length === 0 && <p className="text-center text-gray-400 mt-8">No jobs scheduled for this day</p>}
             <div className="space-y-3">
               {routeJobs.map((job, index) => (

@@ -42,6 +42,7 @@ export default function Home() {
   const [techRouteDriveTimes, setTechRouteDriveTimes] = useState([])
   const [techRouteStartTime, setTechRouteStartTime] = useState(null)
   const [optimizing, setOptimizing] = useState(false)
+  const [optimizeError, setOptimizeError] = useState('')
 
   // Revenue forecast
   const [forecast, setForecast] = useState(0)
@@ -202,6 +203,7 @@ export default function Home() {
   async function optimizeRoute() {
     if (routeJobs.length < 2) return
     setOptimizing(true)
+    setOptimizeError('')
     try {
       const res = await fetch('/api/optimize-route', {
         method: 'POST',
@@ -213,7 +215,9 @@ export default function Home() {
       await Promise.all(reordered.map((job, i) => supabase.from('jobs').update({ route_order: i }).eq('id', job.id)))
       setRouteJobs(reordered)
       setRouteDriveTimes(driveTimes || [])
-    } catch (e) {}
+    } catch (e) {
+      setOptimizeError('Optimization failed. Check that customer addresses are complete.')
+    }
     setOptimizing(false)
   }
 
@@ -352,9 +356,12 @@ export default function Home() {
                     setTechRouteJobs(reordered)
                     setTechRouteDriveTimes(driveTimes || [])
                     setTechRouteStartTime(startDriveTime ?? null)
-                  } catch (e) {}
+                  } catch (e) {
+                    setOptimizeError('Optimization failed. Check that customer addresses are complete.')
+                  }
                   setOptimizing(false)
-                }} disabled={optimizing} className="w-full mb-4 bg-purple-600 text-white py-3 rounded-xl font-semibold text-sm">{optimizing ? 'Optimizing route...' : 'Optimize Route with AI'}</button>
+                }} disabled={optimizing} className="w-full mb-2 bg-purple-600 text-white py-3 rounded-xl font-semibold text-sm">{optimizing ? 'Optimizing route...' : 'Optimize Route with AI'}</button>
+                {optimizeError && <p className="text-red-500 text-sm text-center mb-3">{optimizeError}</p>}
               )}
               {techRouteJobs.length === 0
                 ? <p className="text-center text-gray-400 mt-8">No jobs on this day</p>
@@ -638,8 +645,9 @@ export default function Home() {
             <h2 className="text-xl font-bold text-gray-800 mb-4">Daily Route</h2>
             <input type="date" className="w-full border rounded-xl p-3 text-gray-800 bg-white shadow-sm mb-3" value={routeDate} onChange={e => setRouteDate(e.target.value)} />
             {routeJobs.length >= 2 && (
-              <button onClick={optimizeRoute} disabled={optimizing} className="w-full mb-4 bg-purple-600 text-white py-3 rounded-xl font-semibold text-sm">{optimizing ? 'Optimizing route...' : 'Optimize Route with AI'}</button>
+              <button onClick={optimizeRoute} disabled={optimizing} className="w-full mb-2 bg-purple-600 text-white py-3 rounded-xl font-semibold text-sm">{optimizing ? 'Optimizing route...' : 'Optimize Route with AI'}</button>
             )}
+            {optimizeError && <p className="text-red-500 text-sm text-center mb-3">{optimizeError}</p>}
             {routeJobs.length === 0 && <p className="text-center text-gray-400 mt-8">No jobs scheduled for this day</p>}
             <div className="space-y-1">
               {routeJobs.map((job, index) => (

@@ -1,58 +1,71 @@
 import { NextResponse } from 'next/server'
 
+async function geocode(address) {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`,
+      { headers: { 'User-Agent': 'PoolPro/1.0 (pool service management app)' } }
+    )
+    const data = await res.json()
+    if (data.length > 0) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) }
+  } catch (e) {}
+  return null
+}
+
+function haversineMinutes(a, b) {
+  const R = 3958.8
+  const dLat = (b.lat - a.lat) * Math.PI / 180
+  const dLon = (b.lon - a.lon) * Math.PI / 180
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLon / 2) ** 2
+  const miles = R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x))
+  // Estimate drive time: assume average 30 mph in service areas
+  return Math.round((miles / 30) * 60)
+}
+
 export async function POST(request) {
   const { jobs, startLocation } = await request.json()
-  if (!jobs || jobs.length < 2) return NextResponse.json({ order: (jobs || []).map(j => j.id) })
+  if (!jobs || jobs.length < 2) return NextResponse.json({ order: (jobs || []).map(j => j.id), driveTimes: [], startDriveTime: null })
 
-  // 1. Geocode all job addresses using OpenWeatherMap
-  const geocoded = await Promise.all(jobs.map(async job => {
-    try {
-      const res = await fetch(`http://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(job.customers?.address || '')}&limit=1&appid=${process.env.OPENWEATHER_API_KEY}`)
-      const data = await res.json()
-      if (data.length > 0) return { ...job, lat: data[0].lat, lon: data[0].lon }
-    } catch (e) {}
-    return { ...job, lat: null, lon: null }
-  }))
+  // Geocode all addresses (sequentially to respect Nominatim rate limits)
+  const points = []
+  for (const job of jobs) {
+    const coords = await geocode(job.customers?.address || '')
+    points.push({ id: job.id, ...coords })
+  }
 
-  const valid = geocoded.filter(j => j.lat && j.lon)
-  if (valid.length < 2) return NextResponse.json({ order: jobs.map(j => j.id) })
+  const valid = points.filter(p => p.lat && p.lon)
+  if (valid.length < 2) return NextResponse.json({ order: jobs.map(j => j.id), driveTimes: [], startDriveTime: null })
 
-  // 2. Build coordinate list — prepend tech's current location if provided
+  // Prepend tech's current location if provided
   const hasStart = startLocation?.lat && startLocation?.lon
   const allPoints = hasStart
     ? [{ id: '__start__', lat: startLocation.lat, lon: startLocation.lon }, ...valid]
     : valid
 
-  // 3. Get driving time matrix from OSRM (free, no API key needed)
-  const coords = allPoints.map(p => `${p.lon},${p.lat}`).join(';')
+  // Try OSRM for real driving times, fall back to Haversine
+  const n = allPoints.length
   let matrix = null
   try {
-    const osrmRes = await fetch(`https://router.project-osrm.org/table/v1/driving/${coords}?annotations=duration`)
+    const coords = allPoints.map(p => `${p.lon},${p.lat}`).join(';')
+    const osrmRes = await fetch(`https://router.project-osrm.org/table/v1/driving/${coords}?annotations=duration`, { signal: AbortSignal.timeout(5000) })
     const osrmData = await osrmRes.json()
-    if (osrmData.code === 'Ok') matrix = osrmData.durations
+    if (osrmData.code === 'Ok' && osrmData.durations) {
+      matrix = osrmData.durations.map(row => row.map(s => Math.round(s / 60)))
+    }
   } catch (e) {}
 
-  // Fallback: Haversine straight-line distance if OSRM fails
+  // Haversine fallback
   if (!matrix) {
-    matrix = allPoints.map((a) => allPoints.map((b) => {
-      const R = 3958.8
-      const dLat = (b.lat - a.lat) * Math.PI / 180
-      const dLon = (b.lon - a.lon) * Math.PI / 180
-      const x = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLon / 2) ** 2
-      return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x))
-    }))
+    matrix = allPoints.map(a => allPoints.map(b => haversineMinutes(a, b)))
   }
 
-  // 4. Nearest neighbor — start from index 0 (tech location or first job)
-  const n = allPoints.length
+  // Nearest neighbor algorithm
   const visited = new Array(n).fill(false)
   const order = [0]
   visited[0] = true
-
   for (let step = 0; step < n - 1; step++) {
     const current = order[order.length - 1]
-    let nearest = -1
-    let minTime = Infinity
+    let nearest = -1, minTime = Infinity
     for (let j = 0; j < n; j++) {
       if (!visited[j] && matrix[current][j] < minTime) {
         minTime = matrix[current][j]
@@ -63,20 +76,15 @@ export async function POST(request) {
     visited[nearest] = true
   }
 
-  // Skip index 0 if it was the tech's start location (not a real job)
   const jobOrder = hasStart ? order.slice(1) : order
   const optimizedIds = jobOrder.map(i => allPoints[i].id)
-  const failedIds = geocoded.filter(j => !j.lat).map(j => j.id)
 
-  // Calculate drive times (in minutes) between consecutive stops
-  const driveTimes = []
-  for (let i = 0; i < jobOrder.length - 1; i++) {
-    const secs = matrix[jobOrder[i]][jobOrder[i + 1]]
-    driveTimes.push(Math.round(secs / 60))
-  }
+  // Jobs that failed geocoding go to the end
+  const failedIds = points.filter(p => !p.lat).map(p => p.id)
 
-  // Drive time from start location to first job
-  const startDriveTime = hasStart && jobOrder.length > 0 ? Math.round(matrix[0][jobOrder[0]] / 60) : null
+  // Drive times between consecutive stops (in minutes)
+  const driveTimes = jobOrder.slice(0, -1).map((fromIdx, i) => matrix[fromIdx][jobOrder[i + 1]])
+  const startDriveTime = hasStart && jobOrder.length > 0 ? matrix[0][jobOrder[0]] : null
 
   return NextResponse.json({ order: [...optimizedIds, ...failedIds], driveTimes, startDriveTime })
 }

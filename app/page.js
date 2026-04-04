@@ -134,17 +134,18 @@ export default function Home() {
     const { data: newCust } = await supabase.from('customers').insert([customerForm]).select().single()
     if (newCust && newCustomerPhotos.length > 0) {
       setNewCustomerUploading(true)
-      const urls = []
-      for (const file of newCustomerPhotos) {
-        const fileName = `${newCust.id}/${Date.now()}-${file.name}`
-        const { error } = await supabase.storage.from('equipment-photos').upload(fileName, file)
+      const entries = []
+      for (const pending of newCustomerPhotos) {
+        const safeName = pending.file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+        const fileName = `${newCust.id}/${Date.now()}-${safeName}`
+        const { error } = await supabase.storage.from('equipment-photos').upload(fileName, pending.file)
         if (!error) {
-          const { data: { publicUrl } } = supabase.storage.from('equipment-photos').getPublicUrl(fileName)
-          urls.push(publicUrl)
+          const { data: urlData } = supabase.storage.from('equipment-photos').getPublicUrl(fileName)
+          entries.push({ url: urlData.publicUrl, name: pending.name.trim() || 'Photo' })
         }
       }
-      if (urls.length > 0) {
-        await supabase.from('customers').update({ equipment_photos: urls }).eq('id', newCust.id)
+      if (entries.length > 0) {
+        await supabase.from('customers').update({ equipment_photos: entries }).eq('id', newCust.id)
       }
       setNewCustomerUploading(false)
     }
@@ -488,16 +489,17 @@ export default function Home() {
                 <div>
                   <label className="text-gray-500 text-xs block mb-2">Equipment Pad Photos</label>
                   {newCustomerPhotos.length > 0 && (
-                    <div className="grid grid-cols-3 gap-2 mb-2">
-                      {newCustomerPhotos.map((file, i) => (
-                        <div key={i} className="relative">
-                          <img src={URL.createObjectURL(file)} alt="Equipment" className="w-full h-20 object-cover rounded-lg" />
-                          <button onClick={() => setNewCustomerPhotos(newCustomerPhotos.filter((_, j) => j !== i))} className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center">✕</button>
+                    <div className="space-y-2 mb-2">
+                      {newCustomerPhotos.map((p, i) => (
+                        <div key={i} className="flex gap-3 items-center border rounded-lg p-2 bg-gray-50">
+                          <img src={p.preview} alt="" className="w-14 h-14 object-cover rounded-lg flex-shrink-0" />
+                          <input className="flex-1 border rounded-lg p-2 text-gray-800 bg-white text-sm" placeholder="Photo name" value={p.name} onChange={e => { const updated = [...newCustomerPhotos]; updated[i].name = e.target.value; setNewCustomerPhotos(updated) }} />
+                          <button onClick={() => setNewCustomerPhotos(newCustomerPhotos.filter((_, j) => j !== i))} className="text-red-400 text-xs flex-shrink-0">Remove</button>
                         </div>
                       ))}
                     </div>
                   )}
-                  <input ref={newCustomerFileRef} type="file" accept="image/*" multiple className="hidden" onChange={e => setNewCustomerPhotos([...newCustomerPhotos, ...Array.from(e.target.files)])} />
+                  <input ref={newCustomerFileRef} type="file" accept="image/*" multiple className="hidden" onChange={e => { const staged = Array.from(e.target.files).map(f => ({ file: f, name: f.name.replace(/\.[^/.]+$/, ''), preview: URL.createObjectURL(f) })); setNewCustomerPhotos(prev => [...prev, ...staged]); newCustomerFileRef.current.value = '' }} />
                   <button type="button" onClick={() => newCustomerFileRef.current.click()} className="w-full border-2 border-dashed border-gray-300 rounded-lg p-2 text-gray-400 text-sm hover:border-blue-400 hover:text-blue-400 transition">+ Add Photos</button>
                 </div>
 

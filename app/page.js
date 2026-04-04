@@ -141,7 +141,12 @@ export default function Home() {
   async function addCustomer() {
     if (!customerForm.name) return
     setCustomerError('')
-    const { data: newCust, error: insertError } = await supabase.from('customers').insert([customerForm]).select().single()
+    const payload = {
+      ...customerForm,
+      monthly_rate: customerForm.monthly_rate !== '' ? customerForm.monthly_rate : null,
+      pool_size_gallons: customerForm.pool_size_gallons !== '' ? customerForm.pool_size_gallons : null,
+    }
+    const { data: newCust, error: insertError } = await supabase.from('customers').insert([payload]).select().single()
     if (insertError) {
       setCustomerError(insertError.message)
       return

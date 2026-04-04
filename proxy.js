@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 
-export async function middleware(req) {
+export async function proxy(req) {
   const res = NextResponse.next()
 
   const supabase = createServerClient(
@@ -21,7 +21,8 @@ export async function middleware(req) {
 
   const { data: { session } } = await supabase.auth.getSession()
 
-  if (!session && req.nextUrl.pathname !== '/login') {
+  const isApi = req.nextUrl.pathname.startsWith('/api/')
+  if (!session && req.nextUrl.pathname !== '/login' && !isApi) {
     return NextResponse.redirect(new URL('/login', req.url))
   }
 

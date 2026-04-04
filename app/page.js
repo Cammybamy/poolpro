@@ -24,6 +24,7 @@ export default function Home() {
   const [customers, setCustomers] = useState([])
   const [customerForm, setCustomerForm] = useState({ name: '', address: '', phone: '', email: '', notes: '', service_frequency: 'none', monthly_rate: '', pool_size_gallons: '', pool_type: '', filter_type: '', equipment_brand: '', equipment_notes: '' })
   const [showCustomerForm, setShowCustomerForm] = useState(false)
+  const [customerError, setCustomerError] = useState('')
   const [newCustomerPhotos, setNewCustomerPhotos] = useState([])
   const [newCustomerUploading, setNewCustomerUploading] = useState(false)
   const newCustomerFileRef = useRef()
@@ -139,9 +140,10 @@ export default function Home() {
 
   async function addCustomer() {
     if (!customerForm.name) return
-    const { data: newCust, error: insertError } = await supabase.from('customers').insert([{ ...customerForm, company_id: profile.company_id }]).select().single()
+    setCustomerError('')
+    const { data: newCust, error: insertError } = await supabase.from('customers').insert([customerForm]).select().single()
     if (insertError) {
-      alert(`Could not save customer: ${insertError.message}`)
+      setCustomerError(insertError.message)
       return
     }
     if (newCust && newCustomerPhotos.length > 0) {
@@ -550,6 +552,7 @@ export default function Home() {
                   <button type="button" onClick={() => newCustomerFileRef.current.click()} className="w-full border-2 border-dashed border-gray-300 rounded-lg p-2 text-gray-400 text-sm hover:border-blue-400 hover:text-blue-400 transition">+ Add Photos</button>
                 </div>
 
+                {customerError && <p className="text-red-500 text-sm bg-red-50 rounded-lg p-2">{customerError}</p>}
                 <button onClick={addCustomer} disabled={newCustomerUploading} className="w-full bg-green-500 text-white py-2 rounded-lg font-semibold">{newCustomerUploading ? 'Saving...' : 'Save Customer'}</button>
               </div>
             )}

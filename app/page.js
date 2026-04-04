@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { supabase } from '../lib/supabase'
 import { getProfile } from '../lib/profile'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import dynamic from 'next/dynamic'
 
 const RouteMap = dynamic(() => import('./components/RouteMap'), { ssr: false })
@@ -23,6 +23,9 @@ export default function Home() {
   const [customers, setCustomers] = useState([])
   const [customerForm, setCustomerForm] = useState({ name: '', address: '', phone: '', email: '', notes: '', service_frequency: 'none', monthly_rate: '', pool_size_gallons: '', pool_type: '', filter_type: '', equipment_brand: '', equipment_notes: '' })
   const [showCustomerForm, setShowCustomerForm] = useState(false)
+  const [newCustomerPhotos, setNewCustomerPhotos] = useState([])
+  const [newCustomerUploading, setNewCustomerUploading] = useState(false)
+  const newCustomerFileRef = useRef()
 
   // Jobs
   const [jobs, setJobs] = useState([])
@@ -128,8 +131,25 @@ export default function Home() {
 
   async function addCustomer() {
     if (!customerForm.name) return
-    await supabase.from('customers').insert([customerForm])
-    setCustomerForm({ name: '', address: '', phone: '', email: '', notes: '' })
+    const { data: newCust } = await supabase.from('customers').insert([customerForm]).select().single()
+    if (newCust && newCustomerPhotos.length > 0) {
+      setNewCustomerUploading(true)
+      const urls = []
+      for (const file of newCustomerPhotos) {
+        const fileName = `${newCust.id}/${Date.now()}-${file.name}`
+        const { error } = await supabase.storage.from('equipment-photos').upload(fileName, file)
+        if (!error) {
+          const { data: { publicUrl } } = supabase.storage.from('equipment-photos').getPublicUrl(fileName)
+          urls.push(publicUrl)
+        }
+      }
+      if (urls.length > 0) {
+        await supabase.from('customers').update({ equipment_photos: urls }).eq('id', newCust.id)
+      }
+      setNewCustomerUploading(false)
+    }
+    setCustomerForm({ name: '', address: '', phone: '', email: '', notes: '', service_frequency: 'none', monthly_rate: '', pool_size_gallons: '', pool_type: '', filter_type: '', equipment_brand: '', equipment_notes: '' })
+    setNewCustomerPhotos([])
     setShowCustomerForm(false)
     fetchCustomers()
   }
@@ -464,7 +484,24 @@ export default function Home() {
 
                 <textarea className="w-full border rounded-lg p-2 text-gray-800 bg-white" placeholder="Equipment / Area Notes (trees, debris, quirks...)" value={customerForm.equipment_notes || ''} onChange={e => setCustomerForm({...customerForm, equipment_notes: e.target.value})} />
                 <textarea className="w-full border rounded-lg p-2 text-gray-800 bg-white" placeholder="General Notes" value={customerForm.notes || ''} onChange={e => setCustomerForm({...customerForm, notes: e.target.value})} />
-                <button onClick={addCustomer} className="w-full bg-green-500 text-white py-2 rounded-lg font-semibold">Save Customer</button>
+
+                <div>
+                  <label className="text-gray-500 text-xs block mb-2">Equipment Pad Photos</label>
+                  {newCustomerPhotos.length > 0 && (
+                    <div className="grid grid-cols-3 gap-2 mb-2">
+                      {newCustomerPhotos.map((file, i) => (
+                        <div key={i} className="relative">
+                          <img src={URL.createObjectURL(file)} alt="Equipment" className="w-full h-20 object-cover rounded-lg" />
+                          <button onClick={() => setNewCustomerPhotos(newCustomerPhotos.filter((_, j) => j !== i))} className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center">✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <input ref={newCustomerFileRef} type="file" accept="image/*" multiple className="hidden" onChange={e => setNewCustomerPhotos([...newCustomerPhotos, ...Array.from(e.target.files)])} />
+                  <button type="button" onClick={() => newCustomerFileRef.current.click()} className="w-full border-2 border-dashed border-gray-300 rounded-lg p-2 text-gray-400 text-sm hover:border-blue-400 hover:text-blue-400 transition">+ Add Photos</button>
+                </div>
+
+                <button onClick={addCustomer} disabled={newCustomerUploading} className="w-full bg-green-500 text-white py-2 rounded-lg font-semibold">{newCustomerUploading ? 'Saving...' : 'Save Customer'}</button>
               </div>
             )}
             <div className="space-y-2">

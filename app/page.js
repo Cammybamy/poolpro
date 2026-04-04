@@ -8,34 +8,124 @@ import { useEffect, useState } from 'react'
 export default function Home() {
   const router = useRouter()
   const [profile, setProfile] = useState(null)
+  const [activeTab, setActiveTab] = useState('dashboard')
+
+  // Dashboard
   const [stats, setStats] = useState({ customers: 0, todayJobs: 0, unpaidInvoices: 0, pendingJobs: 0 })
+  const [todayJobs, setTodayJobs] = useState([])
+  const [unpaidInvoices, setUnpaidInvoices] = useState([])
+  const [monthlyRevenue, setMonthlyRevenue] = useState([])
+
+  // Customers
+  const [customers, setCustomers] = useState([])
+  const [customerForm, setCustomerForm] = useState({ name: '', address: '', phone: '', email: '', notes: '' })
+  const [showCustomerForm, setShowCustomerForm] = useState(false)
+
+  // Jobs
+  const [jobs, setJobs] = useState([])
+  const [jobForm, setJobForm] = useState({ customer_id: '', scheduled_date: '', technician: '', notes: '', status: 'pending' })
+  const [showJobForm, setShowJobForm] = useState(false)
+
+  // Route
+  const [routeDate, setRouteDate] = useState(new Date().toISOString().split('T')[0])
+  const [routeJobs, setRouteJobs] = useState([])
+
+  // Chemicals
+  const [chemLogs, setChemLogs] = useState([])
+
+  // Invoices
+  const [invoices, setInvoices] = useState([])
 
   useEffect(() => {
     loadProfile()
   }, [])
 
+  useEffect(() => {
+    if (!profile) return
+    if (activeTab === 'dashboard') fetchDashboard()
+    if (activeTab === 'customers') fetchCustomers()
+    if (activeTab === 'jobs') { fetchJobs(); fetchCustomers() }
+    if (activeTab === 'route') fetchRouteJobs(routeDate)
+    if (activeTab === 'chemicals') fetchChemicals()
+    if (activeTab === 'invoices') fetchInvoices()
+  }, [activeTab, profile])
+
+  useEffect(() => {
+    if (activeTab === 'route') fetchRouteJobs(routeDate)
+  }, [routeDate])
+
   async function loadProfile() {
     const p = await getProfile()
     setProfile(p)
-    if (p?.role === 'owner' || p?.role === 'manager') {
-      fetchStats()
-    }
   }
 
-  async function fetchStats() {
+  async function fetchDashboard() {
     const today = new Date().toISOString().split('T')[0]
-    const [customers, todayJobs, unpaidInvoices, pendingJobs] = await Promise.all([
+    const [cRes, tRes, uRes, pRes, tjRes, uiRes, mrRes] = await Promise.all([
       supabase.from('customers').select('id', { count: 'exact', head: true }),
       supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('scheduled_date', today),
       supabase.from('invoices').select('id', { count: 'exact', head: true }).eq('status', 'unpaid'),
       supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+      supabase.from('jobs').select('*, customers(name, address)').eq('scheduled_date', today).order('route_order'),
+      supabase.from('invoices').select('*, customers(name)').eq('status', 'unpaid').order('due_date').limit(5),
+      supabase.from('monthly_revenue').select('*').limit(6),
     ])
-    setStats({
-      customers: customers.count || 0,
-      todayJobs: todayJobs.count || 0,
-      unpaidInvoices: unpaidInvoices.count || 0,
-      pendingJobs: pendingJobs.count || 0,
-    })
+    setStats({ customers: cRes.count || 0, todayJobs: tRes.count || 0, unpaidInvoices: uRes.count || 0, pendingJobs: pRes.count || 0 })
+    setTodayJobs(tjRes.data || [])
+    setUnpaidInvoices(uiRes.data || [])
+    setMonthlyRevenue(mrRes.data || [])
+  }
+
+  async function fetchCustomers() {
+    const { data } = await supabase.from('customers').select('*').order('name')
+    setCustomers(data || [])
+  }
+
+  async function addCustomer() {
+    if (!customerForm.name) return
+    await supabase.from('customers').insert([customerForm])
+    setCustomerForm({ name: '', address: '', phone: '', email: '', notes: '' })
+    setShowCustomerForm(false)
+    fetchCustomers()
+  }
+
+  async function fetchJobs() {
+    const { data } = await supabase.from('jobs').select('*, customers(name)').order('scheduled_date', { ascending: false })
+    setJobs(data || [])
+  }
+
+  async function addJob() {
+    if (!jobForm.customer_id || !jobForm.scheduled_date) return
+    await supabase.from('jobs').insert([jobForm])
+    setJobForm({ customer_id: '', scheduled_date: '', technician: '', notes: '', status: 'pending' })
+    setShowJobForm(false)
+    fetchJobs()
+  }
+
+  async function fetchRouteJobs(date) {
+    const { data } = await supabase.from('jobs').select('*, customers(name, address)').eq('scheduled_date', date).order('route_order')
+    setRouteJobs(data || [])
+  }
+
+  async function moveJob(index, direction) {
+    const newJobs = [...routeJobs]
+    const swapIndex = index + direction
+    if (swapIndex < 0 || swapIndex >= newJobs.length) return
+    const temp = newJobs[index]
+    newJobs[index] = newJobs[swapIndex]
+    newJobs[swapIndex] = temp
+    await Promise.all(newJobs.map((job, i) => supabase.from('jobs').update({ route_order: i }).eq('id', job.id)))
+    setRouteJobs(newJobs)
+  }
+
+  async function fetchChemicals() {
+    const { data } = await supabase.from('chemical_logs').select('*, customers(name)').order('created_at', { ascending: false })
+    setChemLogs(data || [])
+  }
+
+  async function fetchInvoices() {
+    const { data } = await supabase.from('invoices').select('*, customers(name)').order('created_at', { ascending: false })
+    setInvoices(data || [])
   }
 
   async function handleSignOut() {
@@ -46,84 +136,295 @@ export default function Home() {
   if (!profile) return <div className="p-6 text-gray-400">Loading...</div>
 
   const isTech = profile.role === 'technician'
+  const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
 
-  return (
-    <div className="min-h-screen bg-gray-100">
-      <div className="bg-blue-600 text-white p-6 flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold">PoolPro</h1>
-          <p className="text-blue-100 mt-1">{profile.companies?.name}</p>
-          <p className="text-blue-200 text-xs mt-1 capitalize">{profile.role} — {profile.full_name}</p>
+  if (isTech) {
+    return (
+      <div className="min-h-screen bg-gray-100">
+        <div className="bg-blue-600 text-white p-6 flex justify-between items-start">
+          <div>
+            <h1 className="text-2xl font-bold">PoolPro</h1>
+            <p className="text-blue-200 text-sm mt-1">Welcome, {profile.full_name}</p>
+          </div>
+          <button onClick={handleSignOut} className="text-blue-200 text-sm hover:text-white">Sign Out</button>
         </div>
-        <button onClick={handleSignOut} className="text-blue-200 text-sm mt-1 hover:text-white">
-          Sign Out
-        </button>
-      </div>
-
-      {!isTech && (
-        <div className="p-4 max-w-lg mx-auto mt-4 grid grid-cols-2 gap-3">
-          <div className="bg-white rounded-xl shadow p-4 text-center">
-            <div className="text-3xl font-bold text-blue-600">{stats.todayJobs}</div>
-            <div className="text-gray-500 text-sm mt-1">Jobs Today</div>
-          </div>
-          <div className="bg-white rounded-xl shadow p-4 text-center">
-            <div className="text-3xl font-bold text-yellow-500">{stats.pendingJobs}</div>
-            <div className="text-gray-500 text-sm mt-1">Pending Jobs</div>
-          </div>
-          <div className="bg-white rounded-xl shadow p-4 text-center">
-            <div className="text-3xl font-bold text-green-600">{stats.customers}</div>
-            <div className="text-gray-500 text-sm mt-1">Total Customers</div>
-          </div>
-          <div className="bg-white rounded-xl shadow p-4 text-center">
-            <div className="text-3xl font-bold text-red-500">{stats.unpaidInvoices}</div>
-            <div className="text-gray-500 text-sm mt-1">Unpaid Invoices</div>
-          </div>
-        </div>
-      )}
-
-      <div className="p-4 grid grid-cols-2 gap-4 max-w-lg mx-auto">
-        {!isTech && (
-          <>
-            <Link href="/customers" className="bg-white rounded-xl shadow p-6 text-center hover:shadow-md transition">
-              <div className="text-4xl mb-2">👥</div>
-              <div className="font-semibold text-gray-700">Customers</div>
-            </Link>
-
-            <Link href="/jobs" className="bg-white rounded-xl shadow p-6 text-center hover:shadow-md transition">
-              <div className="text-4xl mb-2">🔧</div>
-              <div className="font-semibold text-gray-700">Jobs</div>
-            </Link>
-
-            <Link href="/chemicals" className="bg-white rounded-xl shadow p-6 text-center hover:shadow-md transition">
-              <div className="text-4xl mb-2">🧪</div>
-              <div className="font-semibold text-gray-700">Chemical Logs</div>
-            </Link>
-
-            <Link href="/invoices" className="bg-white rounded-xl shadow p-6 text-center hover:shadow-md transition">
-              <div className="text-4xl mb-2">🧾</div>
-              <div className="font-semibold text-gray-700">Invoices</div>
-            </Link>
-          </>
-        )}
-
-        <Link href="/route" className={`${isTech ? 'col-span-2' : 'col-span-2'} bg-blue-50 rounded-xl shadow p-6 text-center hover:shadow-md transition`}>
-          <div className="text-4xl mb-2">🗺️</div>
-          <div className="font-semibold text-gray-700">Daily Route</div>
-        </Link>
-
-        {isTech && (
-          <Link href="/my-jobs" className="col-span-2 bg-white rounded-xl shadow p-6 text-center hover:shadow-md transition">
+        <div className="p-4 grid grid-cols-1 gap-4 max-w-lg mx-auto mt-4">
+          <Link href="/my-jobs" className="bg-white rounded-xl shadow p-6 text-center hover:shadow-md transition">
             <div className="text-4xl mb-2">🔧</div>
             <div className="font-semibold text-gray-700">My Jobs</div>
           </Link>
+          <Link href="/route" className="bg-blue-50 rounded-xl shadow p-6 text-center hover:shadow-md transition">
+            <div className="text-4xl mb-2">🗺️</div>
+            <div className="font-semibold text-gray-700">Daily Route</div>
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  const tabs = [
+    { id: 'dashboard', label: 'Dashboard' },
+    { id: 'customers', label: 'Customers' },
+    { id: 'jobs', label: 'Jobs' },
+    { id: 'route', label: 'Route' },
+    { id: 'chemicals', label: 'Chemicals' },
+    { id: 'invoices', label: 'Invoices' },
+    ...(profile.role === 'owner' ? [{ id: 'users', label: 'Users' }] : []),
+  ]
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <nav className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-10">
+        <div>
+          <span className="text-blue-600 font-bold text-lg">PoolPro</span>
+          <div className="text-xs text-gray-400">{profile.full_name} · <span className="capitalize">{profile.role}</span></div>
+        </div>
+        <div className="flex items-center gap-1 overflow-x-auto">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => tab.id === 'users' ? router.push('/users') : setActiveTab(tab.id)}
+              className={`px-3 py-1.5 text-sm rounded-lg whitespace-nowrap transition ${activeTab === tab.id ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50'}`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <button onClick={handleSignOut} className="text-sm text-gray-400 hover:text-gray-600 whitespace-nowrap ml-2">Sign Out</button>
+      </nav>
+
+      <div className="max-w-4xl mx-auto p-4">
+
+        {activeTab === 'dashboard' && (
+          <div>
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold text-gray-800">Dashboard</h2>
+              <p className="text-gray-400 text-sm mt-1">{today}</p>
+              <p className="text-gray-500 text-sm">{profile.companies?.name} — <span className="capitalize">{profile.role}</span></p>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center">
+                <div className="text-3xl font-bold text-blue-600">{stats.todayJobs}</div>
+                <div className="text-gray-500 text-xs mt-1">Jobs Today</div>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center">
+                <div className="text-3xl font-bold text-yellow-500">{stats.pendingJobs}</div>
+                <div className="text-gray-500 text-xs mt-1">Pending Jobs</div>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center">
+                <div className="text-3xl font-bold text-green-600">{stats.customers}</div>
+                <div className="text-gray-500 text-xs mt-1">Customers</div>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center">
+                <div className="text-3xl font-bold text-red-500">{stats.unpaidInvoices}</div>
+                <div className="text-gray-500 text-xs mt-1">Unpaid Invoices</div>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
+              <h3 className="font-semibold text-gray-700 mb-3">Revenue — Last 6 Months</h3>
+              {monthlyRevenue.length === 0 && <p className="text-gray-400 text-sm">No invoice data yet</p>}
+              <div className="space-y-2">
+                {monthlyRevenue.map((row, i) => {
+                  const month = new Date(row.month).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+                  const pct = row.potential > 0 ? Math.round((row.actual / row.potential) * 100) : 0
+                  return (
+                    <div key={i}>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-gray-600">{month}</span>
+                        <span className="text-gray-800 font-medium">${Number(row.actual).toFixed(2)} <span className="text-gray-400 font-normal">/ ${Number(row.potential).toFixed(2)}</span></span>
+                      </div>
+                      <div className="w-full bg-gray-100 rounded-full h-2">
+                        <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${pct}%` }}></div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="font-semibold text-gray-700">Today's Jobs</h3>
+                  <button onClick={() => setActiveTab('jobs')} className="text-blue-600 text-xs hover:underline">View all</button>
+                </div>
+                {todayJobs.length === 0 && <p className="text-gray-400 text-sm">No jobs scheduled today</p>}
+                <div className="space-y-2">
+                  {todayJobs.map(job => (
+                    <Link href={`/jobs/${job.id}`} key={job.id} className="flex justify-between items-center p-2 rounded-lg hover:bg-gray-50">
+                      <div>
+                        <div className="text-sm font-medium text-gray-800">{job.customers?.name}</div>
+                        <div className="text-xs text-gray-400">{job.customers?.address}</div>
+                      </div>
+                      <span className={job.status === 'complete' ? 'text-xs px-2 py-1 rounded-full bg-green-100 text-green-700' : 'text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700'}>{job.status}</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="font-semibold text-gray-700">Unpaid Invoices</h3>
+                  <button onClick={() => setActiveTab('invoices')} className="text-blue-600 text-xs hover:underline">View all</button>
+                </div>
+                {unpaidInvoices.length === 0 && <p className="text-gray-400 text-sm">No unpaid invoices</p>}
+                <div className="space-y-2">
+                  {unpaidInvoices.map(inv => (
+                    <Link href={`/invoices/${inv.id}`} key={inv.id} className="flex justify-between items-center p-2 rounded-lg hover:bg-gray-50">
+                      <div>
+                        <div className="text-sm font-medium text-gray-800">{inv.customers?.name}</div>
+                        <div className="text-xs text-gray-400">Due: {inv.due_date || 'No due date'}</div>
+                      </div>
+                      <span className="text-sm font-semibold text-gray-800">${inv.amount}</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
-        {profile.role === 'owner' && (
-          <Link href="/users" className="col-span-2 bg-gray-50 rounded-xl shadow p-6 text-center hover:shadow-md transition">
-            <div className="text-4xl mb-2">⚙️</div>
-            <div className="font-semibold text-gray-700">Manage Users</div>
-          </Link>
+        {activeTab === 'customers' && (
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-800">Customers</h2>
+              <button onClick={() => setShowCustomerForm(!showCustomerForm)} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">+ Add Customer</button>
+            </div>
+            {showCustomerForm && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4 space-y-3">
+                <input className="w-full border rounded-lg p-2 text-gray-800 bg-white" placeholder="Name *" value={customerForm.name} onChange={e => setCustomerForm({...customerForm, name: e.target.value})} />
+                <input className="w-full border rounded-lg p-2 text-gray-800 bg-white" placeholder="Address" value={customerForm.address} onChange={e => setCustomerForm({...customerForm, address: e.target.value})} />
+                <input className="w-full border rounded-lg p-2 text-gray-800 bg-white" placeholder="Phone" value={customerForm.phone} onChange={e => setCustomerForm({...customerForm, phone: e.target.value})} />
+                <input className="w-full border rounded-lg p-2 text-gray-800 bg-white" placeholder="Email" value={customerForm.email} onChange={e => setCustomerForm({...customerForm, email: e.target.value})} />
+                <textarea className="w-full border rounded-lg p-2 text-gray-800 bg-white" placeholder="Notes" value={customerForm.notes} onChange={e => setCustomerForm({...customerForm, notes: e.target.value})} />
+                <button onClick={addCustomer} className="w-full bg-green-500 text-white py-2 rounded-lg font-semibold">Save Customer</button>
+              </div>
+            )}
+            <div className="space-y-2">
+              {customers.map(c => (
+                <Link href={`/customers/${c.id}`} key={c.id} className="flex justify-between items-center bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition">
+                  <div>
+                    <div className="font-semibold text-gray-800">{c.name}</div>
+                    <div className="text-gray-500 text-sm">{c.address}</div>
+                  </div>
+                  <span className="text-gray-400 text-sm">{c.phone}</span>
+                </Link>
+              ))}
+              {customers.length === 0 && <p className="text-center text-gray-400 mt-8">No customers yet</p>}
+            </div>
+          </div>
         )}
+
+        {activeTab === 'jobs' && (
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-800">Jobs</h2>
+              <button onClick={() => setShowJobForm(!showJobForm)} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">+ Add Job</button>
+            </div>
+            {showJobForm && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4 space-y-3">
+                <select className="w-full border rounded-lg p-2 text-gray-800 bg-white" value={jobForm.customer_id} onChange={e => setJobForm({...jobForm, customer_id: e.target.value})}>
+                  <option value="">Select Customer *</option>
+                  {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                <input type="date" className="w-full border rounded-lg p-2 text-gray-800 bg-white" value={jobForm.scheduled_date} onChange={e => setJobForm({...jobForm, scheduled_date: e.target.value})} />
+                <input className="w-full border rounded-lg p-2 text-gray-800 bg-white" placeholder="Technician" value={jobForm.technician} onChange={e => setJobForm({...jobForm, technician: e.target.value})} />
+                <textarea className="w-full border rounded-lg p-2 text-gray-800 bg-white" placeholder="Notes" value={jobForm.notes} onChange={e => setJobForm({...jobForm, notes: e.target.value})} />
+                <button onClick={addJob} className="w-full bg-green-500 text-white py-2 rounded-lg font-semibold">Save Job</button>
+              </div>
+            )}
+            <div className="space-y-2">
+              {jobs.map(j => (
+                <Link href={`/jobs/${j.id}`} key={j.id} className="flex justify-between items-center bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition">
+                  <div>
+                    <div className="font-semibold text-gray-800">{j.customers?.name}</div>
+                    <div className="text-gray-500 text-sm">{j.scheduled_date}{j.technician ? ` — ${j.technician}` : ''}</div>
+                  </div>
+                  <span className={j.status === 'complete' ? 'text-xs px-2 py-1 rounded-full bg-green-100 text-green-700' : 'text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700'}>{j.status}</span>
+                </Link>
+              ))}
+              {jobs.length === 0 && <p className="text-center text-gray-400 mt-8">No jobs yet</p>}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'route' && (
+          <div>
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Daily Route</h2>
+            <input type="date" className="w-full border rounded-xl p-3 text-gray-800 bg-white shadow-sm mb-4" value={routeDate} onChange={e => setRouteDate(e.target.value)} />
+            {routeJobs.length === 0 && <p className="text-center text-gray-400 mt-8">No jobs scheduled for this day</p>}
+            <div className="space-y-3">
+              {routeJobs.map((job, index) => (
+                <div key={job.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex items-center gap-3">
+                  <div className="flex flex-col gap-1">
+                    <button onClick={() => moveJob(index, -1)} className="text-gray-400 hover:text-blue-600 text-lg leading-none">▲</button>
+                    <button onClick={() => moveJob(index, 1)} className="text-gray-400 hover:text-blue-600 text-lg leading-none">▼</button>
+                  </div>
+                  <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">{index + 1}</div>
+                  <div className="flex-1">
+                    <Link href={`/jobs/${job.id}`} className="font-semibold text-gray-800 hover:text-blue-600">{job.customers?.name}</Link>
+                    <div className="text-gray-500 text-sm">{job.customers?.address}</div>
+                    {job.technician && <div className="text-gray-400 text-xs">Tech: {job.technician}</div>}
+                  </div>
+                  <span className={job.status === 'complete' ? 'text-xs px-2 py-1 rounded-full bg-green-100 text-green-700' : 'text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700'}>{job.status}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'chemicals' && (
+          <div>
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Chemical Logs</h2>
+            <div className="space-y-3">
+              {chemLogs.map(log => (
+                <div key={log.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="font-semibold text-gray-800">{log.customers?.name}</div>
+                    <div className="text-gray-400 text-sm">{new Date(log.created_at).toLocaleDateString()}</div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="bg-blue-50 rounded-lg p-2">
+                      <div className="text-xs text-gray-400">Chlorine</div>
+                      <div className="font-semibold text-gray-800">{log.chlorine ?? '-'}</div>
+                    </div>
+                    <div className="bg-green-50 rounded-lg p-2">
+                      <div className="text-xs text-gray-400">pH</div>
+                      <div className="font-semibold text-gray-800">{log.ph ?? '-'}</div>
+                    </div>
+                    <div className="bg-yellow-50 rounded-lg p-2">
+                      <div className="text-xs text-gray-400">Alkalinity</div>
+                      <div className="font-semibold text-gray-800">{log.alkalinity ?? '-'}</div>
+                    </div>
+                  </div>
+                  {log.notes && <p className="text-gray-500 text-sm mt-2">{log.notes}</p>}
+                </div>
+              ))}
+              {chemLogs.length === 0 && <p className="text-center text-gray-400 mt-8">No chemical logs yet</p>}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'invoices' && (
+          <div>
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Invoices</h2>
+            <div className="space-y-2">
+              {invoices.map(inv => (
+                <Link href={`/invoices/${inv.id}`} key={inv.id} className="flex justify-between items-center bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition">
+                  <div>
+                    <div className="font-semibold text-gray-800">{inv.customers?.name}</div>
+                    <div className="text-gray-500 text-sm">Due: {inv.due_date || 'No due date'}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-semibold text-gray-800">${inv.amount}</div>
+                    <span className={inv.status === 'paid' ? 'text-xs px-2 py-1 rounded-full bg-green-100 text-green-700' : 'text-xs px-2 py-1 rounded-full bg-red-100 text-red-700'}>{inv.status}</span>
+                  </div>
+                </Link>
+              ))}
+              {invoices.length === 0 && <p className="text-center text-gray-400 mt-8">No invoices yet</p>}
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   )

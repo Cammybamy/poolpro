@@ -668,10 +668,15 @@ export default function Home() {
                     <span className={job.status === 'complete' ? 'text-xs px-2 py-1 rounded-full bg-green-100 text-green-700' : 'text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700'}>{job.status}</span>
                   </div>
                   {routeDriveTimes[index] != null && index < routeJobs.length - 1 && (
-                    <div className="flex items-center gap-2 px-2 py-1">
-                      <div className="flex-1 border-t border-dashed border-gray-200"></div>
-                      <span className="text-xs text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full border border-gray-100">{routeDriveTimes[index]} min</span>
-                      <div className="flex-1 border-t border-dashed border-gray-200"></div>
+                    <div className="flex items-center gap-3 px-3 py-1.5">
+                      <div className="flex flex-col items-center gap-0.5 ml-11">
+                        <div className="w-0.5 h-2 bg-blue-300"></div>
+                        <div className="w-0.5 h-2 bg-blue-300"></div>
+                      </div>
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5 flex items-center gap-2">
+                        <span className="text-blue-400 text-sm">🚗</span>
+                        <span className="text-blue-700 font-semibold text-sm">{routeDriveTimes[index]} min drive</span>
+                      </div>
                     </div>
                   )}
                 </div>

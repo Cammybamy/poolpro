@@ -112,10 +112,9 @@ export default function RouteMap({ jobs, onReorder, driveTimes, startDriveTime }
 
       <div className="space-y-1">
         {startDriveTime != null && (
-          <div className="flex items-center gap-2 px-2 py-1">
-            <div className="flex-1 border-t border-dashed border-gray-200"></div>
-            <span className="text-xs text-purple-500 font-medium bg-purple-50 px-2 py-0.5 rounded-full">{startDriveTime} min from your location</span>
-            <div className="flex-1 border-t border-dashed border-gray-200"></div>
+          <div className="bg-purple-100 border border-purple-200 rounded-xl px-4 py-2 flex items-center justify-center gap-2 mb-1">
+            <span className="text-purple-600 text-lg">📍</span>
+            <span className="text-purple-700 font-semibold text-sm">{startDriveTime} min from your location</span>
           </div>
         )}
         {jobs.map((job, index) => (
@@ -133,10 +132,15 @@ export default function RouteMap({ jobs, onReorder, driveTimes, startDriveTime }
               <span className={job.status === 'complete' ? 'text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 flex-shrink-0' : 'text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 flex-shrink-0'}>{job.status}</span>
             </div>
             {driveTimes && driveTimes[index] != null && index < jobs.length - 1 && (
-              <div className="flex items-center gap-2 px-2 py-1">
-                <div className="flex-1 border-t border-dashed border-gray-200"></div>
-                <span className="text-xs text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full border border-gray-100">{driveTimes[index]} min</span>
-                <div className="flex-1 border-t border-dashed border-gray-200"></div>
+              <div className="flex items-center gap-3 px-3 py-1.5">
+                <div className="flex flex-col items-center gap-0.5 ml-9">
+                  <div className="w-0.5 h-2 bg-blue-300"></div>
+                  <div className="w-0.5 h-2 bg-blue-300"></div>
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5 flex items-center gap-2">
+                  <span className="text-blue-400 text-sm">🚗</span>
+                  <span className="text-blue-700 font-semibold text-sm">{driveTimes[index]} min drive</span>
+                </div>
               </div>
             )}
           </div>

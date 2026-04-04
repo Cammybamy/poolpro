@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../../../lib/supabase'
 import Link from 'next/link'
 import { use } from 'react'
+import AddressInput from '../../components/AddressInput'
 
 export default function CustomerDetail({ params }) {
   const { id } = use(params)
@@ -113,7 +114,7 @@ export default function CustomerDetail({ params }) {
           {editing ? (
             <div className="space-y-3">
               <input className="w-full border rounded-lg p-2 text-gray-800 bg-white" placeholder="Name" value={form.name || ''} onChange={e => setForm({...form, name: e.target.value})} />
-              <input className="w-full border rounded-lg p-2 text-gray-800 bg-white" placeholder="Address" value={form.address || ''} onChange={e => setForm({...form, address: e.target.value})} />
+              <AddressInput className="w-full border rounded-lg p-2 text-gray-800 bg-white" placeholder="Address" value={form.address || ''} onChange={val => setForm({...form, address: val})} />
               <input className="w-full border rounded-lg p-2 text-gray-800 bg-white" placeholder="Phone" value={form.phone || ''} onChange={e => setForm({...form, phone: e.target.value})} />
               <input className="w-full border rounded-lg p-2 text-gray-800 bg-white" placeholder="Email" value={form.email || ''} onChange={e => setForm({...form, email: e.target.value})} />
 

@@ -7,6 +7,7 @@ import { useEffect, useState, useRef } from 'react'
 import dynamic from 'next/dynamic'
 
 const RouteMap = dynamic(() => import('./components/RouteMap'), { ssr: false })
+import AddressInput from './components/AddressInput'
 
 export default function Home() {
   const router = useRouter()
@@ -481,7 +482,7 @@ export default function Home() {
             {showCustomerForm && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4 space-y-3">
                 <input className="w-full border rounded-lg p-2 text-gray-800 bg-white" placeholder="Name *" value={customerForm.name} onChange={e => setCustomerForm({...customerForm, name: e.target.value})} />
-                <input className="w-full border rounded-lg p-2 text-gray-800 bg-white" placeholder="Address" value={customerForm.address} onChange={e => setCustomerForm({...customerForm, address: e.target.value})} />
+                <AddressInput className="w-full border rounded-lg p-2 text-gray-800 bg-white" placeholder="Address" value={customerForm.address} onChange={val => setCustomerForm({...customerForm, address: val})} />
                 <input className="w-full border rounded-lg p-2 text-gray-800 bg-white" placeholder="Phone" value={customerForm.phone} onChange={e => setCustomerForm({...customerForm, phone: e.target.value})} />
                 <input className="w-full border rounded-lg p-2 text-gray-800 bg-white" placeholder="Email" value={customerForm.email} onChange={e => setCustomerForm({...customerForm, email: e.target.value})} />
 

@@ -5,9 +5,9 @@ import { getProfile } from '../lib/profile'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState, useRef } from 'react'
 import dynamic from 'next/dynamic'
+import AddressInput from './components/AddressInput'
 
 const RouteMap = dynamic(() => import('./components/RouteMap'), { ssr: false })
-import AddressInput from './components/AddressInput'
 
 export default function Home() {
   const router = useRouter()

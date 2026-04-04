@@ -25,7 +25,7 @@ export default function AddressInput({ value, onChange, placeholder, className }
     setQuery(val)
     onChange(val)
     clearTimeout(debounceRef.current)
-    if (val.length < 3) { setSuggestions([]); setOpen(false); return }
+    if (val.length < 2) { setSuggestions([]); setOpen(false); return }
     debounceRef.current = setTimeout(async () => {
       try {
         const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(val)}&format=json&limit=6&addressdetails=1`, { headers: { 'Accept-Language': 'en-US' } })

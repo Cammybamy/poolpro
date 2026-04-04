@@ -44,8 +44,7 @@
                     <div className="text-gray-500 text-sm">{job.customers?.phone}</div>
                     <div className="text-gray-400 text-xs mt-1">{job.scheduled_date}</div>
                   </div>
-                  <span className={job.status === 'complete' ? 'text-xs px-2 py-1 rounded-full bg-green-100 
-  text-green-700' : 'text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700'}>{job.status}</span>
+                  <span className={job.status === 'complete' ? 'text-xs px-2 py-1 rounded-full bg-green-100 text-green-700' : 'text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700'}>{job.status}</span>
                 </div>
                 {job.notes && <p className="text-gray-500 text-sm mt-2">{job.notes}</p>}
               </Link>

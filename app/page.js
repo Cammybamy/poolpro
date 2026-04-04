@@ -139,7 +139,11 @@ export default function Home() {
 
   async function addCustomer() {
     if (!customerForm.name) return
-    const { data: newCust } = await supabase.from('customers').insert([customerForm]).select().single()
+    const { data: newCust, error: insertError } = await supabase.from('customers').insert([{ ...customerForm, company_id: profile.company_id }]).select().single()
+    if (insertError) {
+      alert(`Could not save customer: ${insertError.message}`)
+      return
+    }
     if (newCust && newCustomerPhotos.length > 0) {
       setNewCustomerUploading(true)
       const results = await Promise.all(newCustomerPhotos.map(async pending => {

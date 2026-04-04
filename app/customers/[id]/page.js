@@ -11,6 +11,7 @@ export default function CustomerDetail({ params }) {
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({})
   const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
   const fileRef = useRef()
 
   useEffect(() => {
@@ -36,19 +37,30 @@ export default function CustomerDetail({ params }) {
   }
 
   async function uploadPhoto(e) {
-    const file = e.target.files[0]
-    if (!file) return
+    const files = Array.from(e.target.files)
+    if (!files.length) return
     setUploading(true)
-    const fileName = `${id}/${Date.now()}-${file.name}`
-    const { error } = await supabase.storage.from('equipment-photos').upload(fileName, file)
-    if (!error) {
-      const { data: { publicUrl } } = supabase.storage.from('equipment-photos').getPublicUrl(fileName)
-      const newPhotos = [...(customer.equipment_photos || []), publicUrl]
-      await supabase.from('customers').update({ equipment_photos: newPhotos }).eq('id', id)
-      setCustomer({ ...customer, equipment_photos: newPhotos })
-      setForm({ ...form, equipment_photos: newPhotos })
+    setUploadError('')
+    const urls = []
+    for (const file of files) {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+      const fileName = `${id}/${Date.now()}-${safeName}`
+      const { error } = await supabase.storage.from('equipment-photos').upload(fileName, file)
+      if (error) {
+        setUploadError(`Upload failed: ${error.message}`)
+        setUploading(false)
+        fileRef.current.value = ''
+        return
+      }
+      const { data: urlData } = supabase.storage.from('equipment-photos').getPublicUrl(fileName)
+      urls.push(urlData.publicUrl)
     }
+    const newPhotos = [...(customer.equipment_photos || []), ...urls]
+    await supabase.from('customers').update({ equipment_photos: newPhotos }).eq('id', id)
+    setCustomer(prev => ({ ...prev, equipment_photos: newPhotos }))
+    setForm(prev => ({ ...prev, equipment_photos: newPhotos }))
     setUploading(false)
+    fileRef.current.value = ''
   }
 
   async function deletePhoto(url) {
@@ -193,10 +205,11 @@ export default function CustomerDetail({ params }) {
               </div>
             ))}
           </div>
-          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={uploadPhoto} />
+          <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={uploadPhoto} />
           <button onClick={() => fileRef.current.click()} disabled={uploading} className="w-full border-2 border-dashed border-gray-300 rounded-lg p-3 text-gray-400 text-sm hover:border-blue-400 hover:text-blue-400 transition">
-            {uploading ? 'Uploading...' : '+ Add Photo'}
+            {uploading ? 'Uploading...' : '+ Add Photos'}
           </button>
+          {uploadError && <p className="text-red-500 text-xs mt-1">{uploadError}</p>}
         </div>
 
         {/* Service History */}

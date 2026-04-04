@@ -68,5 +68,15 @@ export async function POST(request) {
   const optimizedIds = jobOrder.map(i => allPoints[i].id)
   const failedIds = geocoded.filter(j => !j.lat).map(j => j.id)
 
-  return NextResponse.json({ order: [...optimizedIds, ...failedIds] })
+  // Calculate drive times (in minutes) between consecutive stops
+  const driveTimes = []
+  for (let i = 0; i < jobOrder.length - 1; i++) {
+    const secs = matrix[jobOrder[i]][jobOrder[i + 1]]
+    driveTimes.push(Math.round(secs / 60))
+  }
+
+  // Drive time from start location to first job
+  const startDriveTime = hasStart && jobOrder.length > 0 ? Math.round(matrix[0][jobOrder[0]] / 60) : null
+
+  return NextResponse.json({ order: [...optimizedIds, ...failedIds], driveTimes, startDriveTime })
 }

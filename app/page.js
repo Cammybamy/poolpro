@@ -38,6 +38,9 @@ export default function Home() {
   // Route
   const [routeDate, setRouteDate] = useState(new Date().toISOString().split('T')[0])
   const [routeJobs, setRouteJobs] = useState([])
+  const [routeDriveTimes, setRouteDriveTimes] = useState([])
+  const [techRouteDriveTimes, setTechRouteDriveTimes] = useState([])
+  const [techRouteStartTime, setTechRouteStartTime] = useState(null)
   const [optimizing, setOptimizing] = useState(false)
 
   // Revenue forecast
@@ -205,10 +208,11 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jobs: routeJobs })
       })
-      const { order } = await res.json()
+      const { order, driveTimes } = await res.json()
       const reordered = order.map(jobId => routeJobs.find(j => j.id === jobId)).filter(Boolean)
       await Promise.all(reordered.map((job, i) => supabase.from('jobs').update({ route_order: i }).eq('id', job.id)))
       setRouteJobs(reordered)
+      setRouteDriveTimes(driveTimes || [])
     } catch (e) {}
     setOptimizing(false)
   }
@@ -342,10 +346,12 @@ export default function Home() {
                   } catch (e) {}
                   try {
                     const res = await fetch('/api/optimize-route', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jobs: techRouteJobs, startLocation }) })
-                    const { order } = await res.json()
+                    const { order, driveTimes, startDriveTime } = await res.json()
                     const reordered = order.map(jobId => techRouteJobs.find(j => j.id === jobId)).filter(Boolean)
                     await Promise.all(reordered.map((job, i) => supabase.from('jobs').update({ route_order: i }).eq('id', job.id)))
                     setTechRouteJobs(reordered)
+                    setTechRouteDriveTimes(driveTimes || [])
+                    setTechRouteStartTime(startDriveTime ?? null)
                   } catch (e) {}
                   setOptimizing(false)
                 }} disabled={optimizing} className="w-full mb-4 bg-purple-600 text-white py-3 rounded-xl font-semibold text-sm">{optimizing ? 'Optimizing route...' : 'Optimize Route with AI'}</button>
@@ -354,8 +360,12 @@ export default function Home() {
                 ? <p className="text-center text-gray-400 mt-8">No jobs on this day</p>
                 : <RouteMap
                     jobs={techRouteJobs}
+                    driveTimes={techRouteDriveTimes}
+                    startDriveTime={techRouteStartTime}
                     onReorder={async (newJobs) => {
                       setTechRouteJobs(newJobs)
+                      setTechRouteDriveTimes([])
+                      setTechRouteStartTime(null)
                       await Promise.all(newJobs.map((job, i) => supabase.from('jobs').update({ route_order: i }).eq('id', job.id)))
                     }}
                   />
@@ -631,20 +641,29 @@ export default function Home() {
               <button onClick={optimizeRoute} disabled={optimizing} className="w-full mb-4 bg-purple-600 text-white py-3 rounded-xl font-semibold text-sm">{optimizing ? 'Optimizing route...' : 'Optimize Route with AI'}</button>
             )}
             {routeJobs.length === 0 && <p className="text-center text-gray-400 mt-8">No jobs scheduled for this day</p>}
-            <div className="space-y-3">
+            <div className="space-y-1">
               {routeJobs.map((job, index) => (
-                <div key={job.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex items-center gap-3">
-                  <div className="flex flex-col gap-1">
-                    <button onClick={() => moveJob(index, -1)} className="text-gray-400 hover:text-blue-600 text-lg leading-none">▲</button>
-                    <button onClick={() => moveJob(index, 1)} className="text-gray-400 hover:text-blue-600 text-lg leading-none">▼</button>
+                <div key={job.id}>
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex items-center gap-3">
+                    <div className="flex flex-col gap-1">
+                      <button onClick={() => moveJob(index, -1)} className="text-gray-400 hover:text-blue-600 text-lg leading-none">▲</button>
+                      <button onClick={() => moveJob(index, 1)} className="text-gray-400 hover:text-blue-600 text-lg leading-none">▼</button>
+                    </div>
+                    <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">{index + 1}</div>
+                    <div className="flex-1">
+                      <Link href={`/jobs/${job.id}`} className="font-semibold text-gray-800 hover:text-blue-600">{job.customers?.name}</Link>
+                      <div className="text-gray-500 text-sm">{job.customers?.address}</div>
+                      {job.technician && <div className="text-gray-400 text-xs">Tech: {job.technician}</div>}
+                    </div>
+                    <span className={job.status === 'complete' ? 'text-xs px-2 py-1 rounded-full bg-green-100 text-green-700' : 'text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700'}>{job.status}</span>
                   </div>
-                  <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">{index + 1}</div>
-                  <div className="flex-1">
-                    <Link href={`/jobs/${job.id}`} className="font-semibold text-gray-800 hover:text-blue-600">{job.customers?.name}</Link>
-                    <div className="text-gray-500 text-sm">{job.customers?.address}</div>
-                    {job.technician && <div className="text-gray-400 text-xs">Tech: {job.technician}</div>}
-                  </div>
-                  <span className={job.status === 'complete' ? 'text-xs px-2 py-1 rounded-full bg-green-100 text-green-700' : 'text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700'}>{job.status}</span>
+                  {routeDriveTimes[index] != null && index < routeJobs.length - 1 && (
+                    <div className="flex items-center gap-2 px-2 py-1">
+                      <div className="flex-1 border-t border-dashed border-gray-200"></div>
+                      <span className="text-xs text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full border border-gray-100">{routeDriveTimes[index]} min</span>
+                      <div className="flex-1 border-t border-dashed border-gray-200"></div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

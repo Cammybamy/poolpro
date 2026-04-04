@@ -32,7 +32,7 @@ async function geocode(address) {
   return null
 }
 
-export default function RouteMap({ jobs, onReorder }) {
+export default function RouteMap({ jobs, onReorder, driveTimes, startDriveTime }) {
   const [coords, setCoords] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -110,19 +110,35 @@ export default function RouteMap({ jobs, onReorder }) {
         Open Route in Google Maps
       </button>
 
-      <div className="space-y-2">
+      <div className="space-y-1">
+        {startDriveTime != null && (
+          <div className="flex items-center gap-2 px-2 py-1">
+            <div className="flex-1 border-t border-dashed border-gray-200"></div>
+            <span className="text-xs text-purple-500 font-medium bg-purple-50 px-2 py-0.5 rounded-full">{startDriveTime} min from your location</span>
+            <div className="flex-1 border-t border-dashed border-gray-200"></div>
+          </div>
+        )}
         {jobs.map((job, index) => (
-          <div key={job.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 flex items-center gap-3">
-            <div className="flex flex-col gap-0.5">
-              <button onClick={() => moveJob(index, -1)} className="text-gray-400 hover:text-blue-600 text-base leading-none">▲</button>
-              <button onClick={() => moveJob(index, 1)} className="text-gray-400 hover:text-blue-600 text-base leading-none">▼</button>
+          <div key={job.id}>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 flex items-center gap-3">
+              <div className="flex flex-col gap-0.5">
+                <button onClick={() => moveJob(index, -1)} className="text-gray-400 hover:text-blue-600 text-base leading-none">▲</button>
+                <button onClick={() => moveJob(index, 1)} className="text-gray-400 hover:text-blue-600 text-base leading-none">▼</button>
+              </div>
+              <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs flex-shrink-0">{index + 1}</div>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-gray-800 text-sm">{job.customers?.name}</div>
+                <div className="text-gray-500 text-xs truncate">{job.customers?.address}</div>
+              </div>
+              <span className={job.status === 'complete' ? 'text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 flex-shrink-0' : 'text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 flex-shrink-0'}>{job.status}</span>
             </div>
-            <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs flex-shrink-0">{index + 1}</div>
-            <div className="flex-1 min-w-0">
-              <div className="font-semibold text-gray-800 text-sm">{job.customers?.name}</div>
-              <div className="text-gray-500 text-xs truncate">{job.customers?.address}</div>
-            </div>
-            <span className={job.status === 'complete' ? 'text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 flex-shrink-0' : 'text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 flex-shrink-0'}>{job.status}</span>
+            {driveTimes && driveTimes[index] != null && index < jobs.length - 1 && (
+              <div className="flex items-center gap-2 px-2 py-1">
+                <div className="flex-1 border-t border-dashed border-gray-200"></div>
+                <span className="text-xs text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full border border-gray-100">{driveTimes[index]} min</span>
+                <div className="flex-1 border-t border-dashed border-gray-200"></div>
+              </div>
+            )}
           </div>
         ))}
       </div>

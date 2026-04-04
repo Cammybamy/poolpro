@@ -134,16 +134,15 @@ export default function Home() {
     const { data: newCust } = await supabase.from('customers').insert([customerForm]).select().single()
     if (newCust && newCustomerPhotos.length > 0) {
       setNewCustomerUploading(true)
-      const entries = []
-      for (const pending of newCustomerPhotos) {
+      const results = await Promise.all(newCustomerPhotos.map(async pending => {
         const safeName = pending.file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
         const fileName = `${newCust.id}/${Date.now()}-${safeName}`
         const { error } = await supabase.storage.from('equipment-photos').upload(fileName, pending.file)
-        if (!error) {
-          const { data: urlData } = supabase.storage.from('equipment-photos').getPublicUrl(fileName)
-          entries.push({ url: urlData.publicUrl, name: pending.name.trim() || 'Photo' })
-        }
-      }
+        if (error) return null
+        const { data: urlData } = supabase.storage.from('equipment-photos').getPublicUrl(fileName)
+        return { url: urlData.publicUrl, name: pending.name.trim() || 'Photo' }
+      }))
+      const entries = results.filter(Boolean)
       if (entries.length > 0) {
         await supabase.from('customers').update({ equipment_photos: entries }).eq('id', newCust.id)
       }

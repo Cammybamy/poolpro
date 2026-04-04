@@ -53,20 +53,21 @@ export default function CustomerDetail({ params }) {
     if (!pendingPhotos.length) return
     setUploading(true)
     setUploadError('')
-    const newEntries = []
-    for (const pending of pendingPhotos) {
+    const results = await Promise.all(pendingPhotos.map(async pending => {
       const safeName = pending.file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
       const fileName = `${id}/${Date.now()}-${safeName}`
       const { error } = await supabase.storage.from('equipment-photos').upload(fileName, pending.file)
-      if (error) {
-        setUploadError(`Upload failed: ${error.message}`)
-        setUploading(false)
-        return
-      }
+      if (error) return { error: error.message }
       const { data: urlData } = supabase.storage.from('equipment-photos').getPublicUrl(fileName)
-      newEntries.push({ url: urlData.publicUrl, name: pending.name.trim() || 'Photo' })
+      return { url: urlData.publicUrl, name: pending.name.trim() || 'Photo' }
+    }))
+    const failed = results.find(r => r.error)
+    if (failed) {
+      setUploadError(`Upload failed: ${failed.error}`)
+      setUploading(false)
+      return
     }
-    const newPhotos = [...(customer.equipment_photos || []), ...newEntries]
+    const newPhotos = [...(customer.equipment_photos || []), ...results]
     await supabase.from('customers').update({ equipment_photos: newPhotos }).eq('id', id)
     setCustomer(prev => ({ ...prev, equipment_photos: newPhotos }))
     setForm(prev => ({ ...prev, equipment_photos: newPhotos }))

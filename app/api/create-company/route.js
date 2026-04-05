@@ -25,7 +25,7 @@ export async function POST(req) {
 
   // Invite the owner
   const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(owner_email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/welcome`,
+    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?next=/welcome`,
     data: { full_name: owner_name, role: 'owner', company_id: company.id }
   })
 

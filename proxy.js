@@ -23,7 +23,7 @@ export async function proxy(req) {
 
   const path = req.nextUrl.pathname
   const isApi = path.startsWith('/api/')
-  const isPublic = path === '/login' || path === '/landing' || path === '/welcome'
+  const isPublic = path === '/login' || path === '/landing' || path === '/welcome' || path.startsWith('/auth/')
   const isAdmin = path.startsWith('/admin')
 
   if (!session && !isPublic && !isApi) {

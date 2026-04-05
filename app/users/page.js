@@ -76,8 +76,12 @@ export default function Users() {
   }
 
   async function removeUser(userId) {
-    if (!confirm('Remove this user from your team?')) return
-    await supabase.from('profiles').delete().eq('id', userId)
+    if (!confirm('Remove this user? This will fully delete their account so they can be re-invited later.')) return
+    await fetch('/api/admin/delete-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profile_id: userId })
+    })
     fetchUsers(profile.company_id)
   }
 

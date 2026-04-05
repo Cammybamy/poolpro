@@ -332,8 +332,12 @@ function TeamTab({ users, companyId, onViewAs, onRefresh }) {
   }
 
   async function removeUser(id) {
-    if (!confirm('Remove this user?')) return
-    await supabase.from('profiles').delete().eq('id', id)
+    if (!confirm('Remove this user? This will fully delete their account so they can be re-invited later.')) return
+    await fetch('/api/admin/delete-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profile_id: id })
+    })
     onRefresh()
   }
 
@@ -772,8 +776,12 @@ function SuperAdminsTab() {
   }
 
   async function revokeAdmin(id) {
-    if (!confirm('Remove admin access entirely? This cannot be undone easily.')) return
-    await supabase.from('profiles').update({ super_admin: false, admin_tier: 'admin' }).eq('id', id)
+    if (!confirm('Remove admin access entirely? This will fully delete their account so they can be re-invited later.')) return
+    await fetch('/api/admin/delete-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profile_id: id })
+    })
     fetchAdmins()
   }
 

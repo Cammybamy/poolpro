@@ -20,6 +20,15 @@ export default function Home() {
   const [unpaidInvoices, setUnpaidInvoices] = useState([])
   const [monthlyRevenue, setMonthlyRevenue] = useState([])
 
+  // Weather
+  const [weather, setWeather] = useState([])
+  const [weatherCity, setWeatherCity] = useState('')
+
+  // Calendar
+  const [calendarMonth, setCalendarMonth] = useState(new Date())
+  const [calendarJobs, setCalendarJobs] = useState([])
+  const [selectedDay, setSelectedDay] = useState(null)
+
   // Customers
   const [customers, setCustomers] = useState([])
   const [customerForm, setCustomerForm] = useState({ name: '', address: '', phone: '', email: '', notes: '', service_frequency: 'none', monthly_rate: '', pool_size_gallons: '', pool_type: '', filter_type: '', equipment_brand: '', equipment_notes: '' })
@@ -72,7 +81,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!profile) return
-    if (activeTab === 'dashboard') fetchDashboard()
+    if (activeTab === 'dashboard') { fetchDashboard(); fetchWeather(); fetchCalendarJobs(calendarMonth) }
     if (activeTab === 'customers') fetchCustomers()
     if (activeTab === 'jobs') { fetchJobs(); fetchCustomers(); fetchTechnicians() }
     if (activeTab === 'route') fetchRouteJobs(routeDate)
@@ -136,6 +145,27 @@ export default function Home() {
     setMonthlyRevenue(mrRes.data || [])
     const total = (fcRes.data || []).reduce((sum, c) => sum + (parseFloat(c.monthly_rate) || 0), 0)
     setForecast(total)
+  }
+
+  function fetchWeather() {
+    if (!navigator.geolocation) return
+    navigator.geolocation.getCurrentPosition(async pos => {
+      try {
+        const res = await fetch(`/api/weather?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`)
+        const data = await res.json()
+        setWeather(data.forecast || [])
+        setWeatherCity(data.city || '')
+      } catch (e) {}
+    }, null, { timeout: 6000 })
+  }
+
+  async function fetchCalendarJobs(month) {
+    const year = month.getFullYear()
+    const m = month.getMonth()
+    const start = new Date(year, m, 1).toISOString().split('T')[0]
+    const end = new Date(year, m + 1, 0).toISOString().split('T')[0]
+    const { data } = await supabase.from('jobs').select('id, scheduled_date, status, technician, customers(name)').gte('scheduled_date', start).lte('scheduled_date', end).order('scheduled_date')
+    setCalendarJobs(data || [])
   }
 
   async function fetchCustomers() {
@@ -474,6 +504,89 @@ export default function Home() {
                   )
                 })}
               </div>
+            </div>
+
+            {/* Weather Forecast */}
+            {weather.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
+                <h3 className="font-semibold text-gray-700 mb-3">Weather {weatherCity && <span className="text-gray-400 font-normal text-sm">— {weatherCity}</span>}</h3>
+                <div className="grid grid-cols-4 md:grid-cols-7 gap-2">
+                  {weather.map((day, i) => {
+                    const d = new Date(day.date + 'T12:00:00')
+                    const label = i === 0 ? 'Today' : d.toLocaleDateString('en-US', { weekday: 'short' })
+                    const emoji = { Clear: '☀️', Clouds: '⛅', Rain: '🌧️', Drizzle: '🌦️', Thunderstorm: '⛈️', Snow: '❄️', Mist: '🌫️', Fog: '🌫️', Haze: '🌫️' }[day.condition] || '🌤️'
+                    return (
+                      <div key={day.date} className={`text-center rounded-xl p-2 ${i === 0 ? 'bg-blue-50 border border-blue-100' : 'bg-gray-50'}`}>
+                        <div className="text-xs font-semibold text-gray-500 mb-1">{label}</div>
+                        <div className="text-2xl mb-1">{emoji}</div>
+                        <div className="text-xs font-bold text-gray-800">{day.high}°</div>
+                        <div className="text-xs text-gray-400">{day.low}°</div>
+                        <div className="text-xs text-gray-400 mt-0.5 truncate">{day.condition}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Calendar */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="font-semibold text-gray-700">{calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h3>
+                <div className="flex gap-2">
+                  <button onClick={() => { const m = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1); setCalendarMonth(m); fetchCalendarJobs(m) }} className="text-gray-400 hover:text-blue-600 px-2 py-1 rounded-lg hover:bg-gray-50">‹</button>
+                  <button onClick={() => { const m = new Date(); setCalendarMonth(m); fetchCalendarJobs(m) }} className="text-xs text-blue-600 hover:underline px-2 py-1">Today</button>
+                  <button onClick={() => { const m = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1); setCalendarMonth(m); fetchCalendarJobs(m) }} className="text-gray-400 hover:text-blue-600 px-2 py-1 rounded-lg hover:bg-gray-50">›</button>
+                </div>
+              </div>
+              <div className="grid grid-cols-7 gap-1 mb-1">
+                {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => <div key={d} className="text-center text-xs font-semibold text-gray-400 py-1">{d}</div>)}
+              </div>
+              <div className="grid grid-cols-7 gap-1">
+                {(() => {
+                  const year = calendarMonth.getFullYear()
+                  const month = calendarMonth.getMonth()
+                  const firstDay = new Date(year, month, 1).getDay()
+                  const daysInMonth = new Date(year, month + 1, 0).getDate()
+                  const todayStr = new Date().toISOString().split('T')[0]
+                  const cells = []
+                  for (let i = 0; i < firstDay; i++) cells.push(<div key={`e${i}`} />)
+                  for (let d = 1; d <= daysInMonth; d++) {
+                    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+                    const dayJobs = calendarJobs.filter(j => j.scheduled_date === dateStr)
+                    const isToday = dateStr === todayStr
+                    const isSelected = selectedDay === dateStr
+                    cells.push(
+                      <button key={d} onClick={() => setSelectedDay(isSelected ? null : dateStr)} className={`rounded-lg p-1 text-center transition min-h-10 ${isToday ? 'bg-blue-600 text-white' : isSelected ? 'bg-blue-50 border border-blue-300' : 'hover:bg-gray-50'}`}>
+                        <div className={`text-xs font-semibold ${isToday ? 'text-white' : 'text-gray-700'}`}>{d}</div>
+                        {dayJobs.length > 0 && (
+                          <div className={`text-xs font-bold mt-0.5 ${isToday ? 'text-blue-100' : 'text-blue-600'}`}>{dayJobs.length} job{dayJobs.length > 1 ? 's' : ''}</div>
+                        )}
+                      </button>
+                    )
+                  }
+                  return cells
+                })()}
+              </div>
+              {selectedDay && (() => {
+                const dayJobs = calendarJobs.filter(j => j.scheduled_date === selectedDay)
+                return dayJobs.length > 0 ? (
+                  <div className="mt-3 border-t pt-3">
+                    <p className="text-xs font-semibold text-gray-500 mb-2">{new Date(selectedDay + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+                    <div className="space-y-1">
+                      {dayJobs.map(j => (
+                        <Link href={`/jobs/${j.id}`} key={j.id} className="flex justify-between items-center p-2 rounded-lg hover:bg-gray-50">
+                          <div>
+                            <span className="text-sm font-medium text-gray-800">{j.customers?.name}</span>
+                            {j.technician && <span className="text-xs text-gray-400 ml-2">— {j.technician}</span>}
+                          </div>
+                          <span className={j.status === 'complete' ? 'text-xs px-2 py-1 rounded-full bg-green-100 text-green-700' : 'text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700'}>{j.status}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                ) : <p className="mt-3 text-gray-400 text-sm text-center">No jobs on this day</p>
+              })()}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

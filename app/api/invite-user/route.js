@@ -14,7 +14,7 @@ export async function POST(req) {
 
   // Send invite email — user sets their own password via the link
   const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/join`,
     data: { full_name, role, company_id }
   })
 

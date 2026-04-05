@@ -21,13 +21,13 @@ export async function proxy(req) {
 
   const { data: { session } } = await supabase.auth.getSession()
 
-  const isApi = req.nextUrl.pathname.startsWith('/api/')
-  const isLogin = req.nextUrl.pathname === '/login'
-  const isWelcome = req.nextUrl.pathname === '/welcome'
-  const isAdmin = req.nextUrl.pathname.startsWith('/admin')
+  const path = req.nextUrl.pathname
+  const isApi = path.startsWith('/api/')
+  const isPublic = path === '/login' || path === '/landing' || path === '/welcome'
+  const isAdmin = path.startsWith('/admin')
 
-  if (!session && !isLogin && !isApi && !isWelcome) {
-    return NextResponse.redirect(new URL('/login', req.url))
+  if (!session && !isPublic && !isApi) {
+    return NextResponse.redirect(new URL('/landing', req.url))
   }
 
   // Protect /admin — only super_admins

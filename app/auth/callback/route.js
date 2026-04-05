@@ -26,10 +26,9 @@ export async function GET(request) {
 
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
-      return NextResponse.redirect(`${origin}${next}`)
+      return NextResponse.redirect(`${origin}/welcome`)
     }
   }
 
-  // Something went wrong — send to login
-  return NextResponse.redirect(`${origin}/login?error=invite_failed`)
+  return NextResponse.redirect(`${origin}/login`)
 }

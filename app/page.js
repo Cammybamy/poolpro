@@ -77,6 +77,8 @@ export default function Home() {
   const [techRouteDate, setTechRouteDate] = useState(new Date().toISOString().split('T')[0])
   const [techRouteJobs, setTechRouteJobs] = useState([])
 
+  const [adminView, setAdminView] = useState(null)
+
   useEffect(() => {
     loadProfile()
   }, [])
@@ -97,12 +99,31 @@ export default function Home() {
   }, [routeDate])
 
   async function loadProfile() {
+    // Check for admin impersonation
+    const adminViewRaw = typeof window !== 'undefined' ? sessionStorage.getItem('adminView') : null
+    if (adminViewRaw) {
+      const av = JSON.parse(adminViewRaw)
+      setAdminView(av)
+      const p = await getProfile()
+      // Override role and company for the impersonated view
+      setProfile({ ...p, role: av.role, company_id: av.company_id, full_name: av.user_name, companies: { name: av.company_name } })
+      if (av.role === 'technician') {
+        fetchTechJobs(av.user_name)
+        fetchTechRoute(av.user_name, new Date().toISOString().split('T')[0])
+      }
+      return
+    }
     const p = await getProfile()
     setProfile(p)
     if (p?.role === 'technician') {
       fetchTechJobs(p.full_name)
       fetchTechRoute(p.full_name, new Date().toISOString().split('T')[0])
     }
+  }
+
+  function exitAdminView() {
+    sessionStorage.removeItem('adminView')
+    window.location.reload()
   }
 
   async function fetchTechJobs(name) {
@@ -456,6 +477,12 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {adminView && (
+        <div className="bg-yellow-400 text-gray-900 px-4 py-2 flex items-center justify-between sticky top-0 z-20 text-sm font-semibold">
+          <span>👁 Admin View — {adminView.company_name} as <span className="capitalize">{adminView.role}</span> ({adminView.user_name})</span>
+          <button onClick={exitAdminView} className="bg-gray-900 text-yellow-400 px-3 py-1 rounded-lg text-xs font-bold hover:bg-gray-800 transition">Exit View</button>
+        </div>
+      )}
       <nav className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-10">
         <div>
           <span className="text-blue-600 font-bold text-lg">PoolPro</span>

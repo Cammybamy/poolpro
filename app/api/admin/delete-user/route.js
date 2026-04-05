@@ -27,13 +27,30 @@ export async function POST(req) {
     }
   }
 
-  // If no profile found but email provided, look up auth user directly
+  // If no profile found but email provided, look up auth user directly via SQL
   if (!authUserId && email) {
-    const { data } = await supabase.auth.admin.listUsers()
-    const authUser = (data?.users || []).find(u => u.email === email)
-    if (authUser) authUserId = authUser.id
     // Also clean up any orphaned profile row by email
     await supabase.from('profiles').delete().eq('email', email)
+
+    // Use raw SQL to find the user — handles pending/invited states that listUsers misses
+    const { data: authData } = await supabase
+      .rpc('get_user_id_by_email', { user_email: email.toLowerCase() })
+      .single()
+
+    if (authData) {
+      authUserId = authData
+    } else {
+      // Fallback: paginated list search
+      let page = 1
+      let found = false
+      while (!found) {
+        const { data } = await supabase.auth.admin.listUsers({ page, perPage: 1000 })
+        const match = (data?.users || []).find(u => u.email?.toLowerCase() === email.toLowerCase())
+        if (match) { authUserId = match.id; found = true }
+        if (!data?.users?.length || data.users.length < 1000) break
+        page++
+      }
+    }
   }
 
   if (!authUserId) {

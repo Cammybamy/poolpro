@@ -23,6 +23,8 @@ export default function Home() {
   // Weather
   const [weather, setWeather] = useState([])
   const [weatherCity, setWeatherCity] = useState('')
+  const [weatherLoading, setWeatherLoading] = useState(false)
+  const [weatherError, setWeatherError] = useState('')
 
   // Calendar
   const [calendarMonth, setCalendarMonth] = useState(new Date())
@@ -147,16 +149,38 @@ export default function Home() {
     setForecast(total)
   }
 
-  function fetchWeather() {
-    if (!navigator.geolocation) return
-    navigator.geolocation.getCurrentPosition(async pos => {
-      try {
-        const res = await fetch(`/api/weather?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`)
-        const data = await res.json()
-        setWeather(data.forecast || [])
-        setWeatherCity(data.city || '')
-      } catch (e) {}
-    }, null, { timeout: 6000 })
+  async function fetchWeather() {
+    setWeatherLoading(true)
+    setWeatherError('')
+    try {
+      let lat, lon
+      // Try GPS first
+      if (navigator.geolocation) {
+        try {
+          const pos = await new Promise((resolve, reject) =>
+            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 6000 })
+          )
+          lat = pos.coords.latitude
+          lon = pos.coords.longitude
+        } catch (e) {}
+      }
+      // Fall back to IP-based location
+      if (!lat || !lon) {
+        const ipRes = await fetch('https://ipapi.co/json/')
+        const ipData = await ipRes.json()
+        lat = ipData.latitude
+        lon = ipData.longitude
+      }
+      if (!lat || !lon) { setWeatherError('Could not determine location.'); setWeatherLoading(false); return }
+      const res = await fetch(`/api/weather?lat=${lat}&lon=${lon}`)
+      const data = await res.json()
+      if (data.error) { setWeatherError(`Weather API error: ${data.error}`); setWeatherLoading(false); return }
+      setWeather(data.forecast || [])
+      setWeatherCity(data.city || '')
+    } catch (e) {
+      setWeatherError(`Failed to load weather: ${e.message}`)
+    }
+    setWeatherLoading(false)
   }
 
   async function fetchCalendarJobs(month) {
@@ -507,9 +531,11 @@ export default function Home() {
             </div>
 
             {/* Weather Forecast */}
-            {weather.length > 0 && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
-                <h3 className="font-semibold text-gray-700 mb-3">Weather {weatherCity && <span className="text-gray-400 font-normal text-sm">— {weatherCity}</span>}</h3>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
+              <h3 className="font-semibold text-gray-700 mb-3">Weather {weatherCity && <span className="text-gray-400 font-normal text-sm">— {weatherCity}</span>}</h3>
+              {weatherLoading && <p className="text-gray-400 text-sm text-center py-4">Loading forecast...</p>}
+              {weatherError && <p className="text-red-500 text-sm">{weatherError}</p>}
+              {weather.length > 0 && (
                 <div className="grid grid-cols-4 md:grid-cols-7 gap-2">
                   {weather.map((day, i) => {
                     const d = new Date(day.date + 'T12:00:00')
@@ -526,8 +552,8 @@ export default function Home() {
                     )
                   })}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Calendar */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">

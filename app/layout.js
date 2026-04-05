@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: "PoolPro",
+  title: "Pool Pilot",
   description: "Pool Service Management",
 };
 

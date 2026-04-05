@@ -21,7 +21,7 @@
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
         <div className="bg-white rounded-xl shadow p-8 w-full max-w-sm">
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">PoolPro</h1>
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">Pool Pilot</h1>
           <p className="text-gray-400 text-sm mb-6">Sign in to continue</p>
 
           {error && <p className="text-red-500 text-sm mb-4">{error}</p>}

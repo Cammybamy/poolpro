@@ -40,7 +40,7 @@ export default function AdminPanel() {
         <div className="flex items-center gap-4">
           <Link href="/" className="text-gray-500 hover:text-white text-sm">← App</Link>
           <div className="flex items-center gap-2">
-            <span className="text-yellow-400 font-bold text-lg">PoolPro</span>
+            <span className="text-yellow-400 font-bold text-lg">Pool Pilot</span>
             <span className="bg-yellow-400 text-gray-900 text-xs font-bold px-2 py-0.5 rounded-full">SUPER ADMIN</span>
           </div>
         </div>

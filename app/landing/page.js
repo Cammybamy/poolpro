@@ -35,7 +35,7 @@ export default function Landing() {
       <nav className="border-b border-gray-100 px-6 py-4 flex items-center justify-between max-w-6xl mx-auto">
         <div className="flex items-center gap-2">
           <span className="text-2xl">🏊</span>
-          <span className="text-xl font-bold text-blue-600">PoolPro</span>
+          <span className="text-xl font-bold text-blue-600">Pool Pilot</span>
         </div>
         <Link href="/login" className="bg-blue-600 text-white px-5 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 transition">
           Log In
@@ -51,7 +51,7 @@ export default function Landing() {
           Run your pool route<br className="hidden md:block" /> smarter, not harder.
         </h1>
         <p className="text-xl text-gray-500 max-w-2xl mx-auto mb-10">
-          PoolPro gives your team everything they need — optimized routes, chemical logs, customer records, invoices, and AI-powered insights — all in one place.
+          Pool Pilot gives your team everything they need — optimized routes, chemical logs, customer records, invoices, and AI-powered insights — all in one place.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <a href="#interest" className="bg-blue-600 text-white px-8 py-3 rounded-xl text-base font-semibold hover:bg-blue-700 transition">
@@ -67,7 +67,7 @@ export default function Landing() {
       <section className="bg-gray-50 py-20 px-6">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-3xl font-bold text-gray-900 text-center mb-4">Everything your team needs</h2>
-          <p className="text-gray-500 text-center mb-12 max-w-xl mx-auto">From the office to the field, PoolPro keeps your whole operation in sync.</p>
+          <p className="text-gray-500 text-center mb-12 max-w-xl mx-auto">From the office to the field, Pool Pilot keeps your whole operation in sync.</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {[
               {
@@ -165,7 +165,7 @@ export default function Landing() {
             <div className="bg-white rounded-2xl p-8 text-center">
               <div className="text-5xl mb-4">✅</div>
               <h3 className="text-xl font-bold text-gray-900 mb-2">You're on the list!</h3>
-              <p className="text-gray-500">Thanks for your interest in PoolPro. We'll reach out to you soon.</p>
+              <p className="text-gray-500">Thanks for your interest in Pool Pilot. We'll reach out to you soon.</p>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="bg-white rounded-2xl p-8 space-y-4">
@@ -238,7 +238,7 @@ export default function Landing() {
       <footer className="border-t border-gray-100 py-8 px-6 text-center text-gray-400 text-sm">
         <div className="flex items-center justify-center gap-2 mb-2">
           <span className="text-lg">🏊</span>
-          <span className="font-semibold text-gray-600">PoolPro</span>
+          <span className="font-semibold text-gray-600">Pool Pilot</span>
         </div>
         <p>Pool service management software. Access by invite only.</p>
       </footer>

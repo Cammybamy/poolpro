@@ -64,7 +64,7 @@ export default function Welcome() {
       <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md">
         <div className="text-center mb-8">
           <div className="text-4xl mb-3">🏊</div>
-          <h1 className="text-2xl font-bold text-gray-900">Welcome to PoolPro</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Welcome to Pool Pilot</h1>
           <p className="text-gray-500 text-sm mt-1">Set up your account to get started</p>
         </div>
 

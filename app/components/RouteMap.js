@@ -22,7 +22,7 @@ function numberIcon(num) {
 async function geocode(address) {
   try {
     const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`, {
-      headers: { 'User-Agent': 'PoolPro/1.0' }
+      headers: { 'User-Agent': 'Pool Pilot/1.0' }
     })
     const data = await res.json()
     if (data.length > 0) {

@@ -347,7 +347,7 @@ export default function Home() {
       <div className="min-h-screen bg-gray-50">
         <nav className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-10">
           <div>
-            <span className="text-blue-600 font-bold text-lg">PoolPro</span>
+            <span className="text-blue-600 font-bold text-lg">Pool Pilot</span>
             <div className="text-xs text-gray-400">{profile.full_name} · Technician</div>
           </div>
           <div className="flex items-center gap-1">
@@ -485,7 +485,7 @@ export default function Home() {
       )}
       <nav className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-10">
         <div>
-          <span className="text-blue-600 font-bold text-lg">PoolPro</span>
+          <span className="text-blue-600 font-bold text-lg">Pool Pilot</span>
           <div className="text-xs text-gray-400">{profile.full_name} · <span className="capitalize">{profile.role}</span></div>
         </div>
         <div className="flex items-center gap-1 overflow-x-auto">

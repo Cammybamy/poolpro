@@ -451,7 +451,7 @@ export default function Home() {
     { id: 'chemicals', label: 'Chemicals' },
     { id: 'invoices', label: 'Invoices' },
     { id: 'reports', label: 'Reports' },
-    ...(profile.role === 'owner' ? [{ id: 'users', label: 'Users' }] : []),
+    ...(profile.role === 'owner' || profile.role === 'manager' ? [{ id: 'users', label: 'Team' }] : []),
   ]
 
   return (
@@ -472,6 +472,9 @@ export default function Home() {
             </button>
           ))}
         </div>
+        {profile.super_admin && (
+          <button onClick={() => router.push('/admin')} className="text-xs bg-yellow-400 text-gray-900 px-2 py-1 rounded-lg font-bold whitespace-nowrap ml-1">Admin</button>
+        )}
         <button onClick={handleSignOut} className="text-sm text-gray-400 hover:text-gray-600 whitespace-nowrap ml-2">Sign Out</button>
       </nav>
 

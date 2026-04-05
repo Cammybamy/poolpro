@@ -22,8 +22,25 @@ export async function proxy(req) {
   const { data: { session } } = await supabase.auth.getSession()
 
   const isApi = req.nextUrl.pathname.startsWith('/api/')
-  if (!session && req.nextUrl.pathname !== '/login' && !isApi) {
+  const isLogin = req.nextUrl.pathname === '/login'
+  const isWelcome = req.nextUrl.pathname === '/welcome'
+  const isAdmin = req.nextUrl.pathname.startsWith('/admin')
+
+  if (!session && !isLogin && !isApi && !isWelcome) {
     return NextResponse.redirect(new URL('/login', req.url))
+  }
+
+  // Protect /admin — only super_admins
+  if (isAdmin && session) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('super_admin')
+      .eq('user_id', session.user.id)
+      .single()
+
+    if (!profile?.super_admin) {
+      return NextResponse.redirect(new URL('/', req.url))
+    }
   }
 
   return res

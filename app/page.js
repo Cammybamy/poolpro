@@ -41,6 +41,7 @@ export default function Home() {
   const [routeDriveTimes, setRouteDriveTimes] = useState([])
   const [techRouteDriveTimes, setTechRouteDriveTimes] = useState([])
   const [techRouteStartTime, setTechRouteStartTime] = useState(null)
+  const [techUserLocation, setTechUserLocation] = useState(null)
   const [optimizing, setOptimizing] = useState(false)
   const [optimizeError, setOptimizeError] = useState('')
 
@@ -348,6 +349,7 @@ export default function Home() {
                         { timeout: 8000 }
                       )
                     })
+                    if (startLocation) setTechUserLocation(startLocation)
                   } catch (e) {}
                   try {
                     const res = await fetch('/api/optimize-route', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jobs: techRouteJobs, startLocation }) })
@@ -371,6 +373,7 @@ export default function Home() {
                     jobs={techRouteJobs}
                     driveTimes={techRouteDriveTimes}
                     startDriveTime={techRouteStartTime}
+                    userLocation={techUserLocation}
                     onReorder={async (newJobs) => {
                       setTechRouteJobs(newJobs)
                       setTechRouteDriveTimes([])

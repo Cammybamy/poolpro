@@ -32,7 +32,16 @@ async function geocode(address) {
   return null
 }
 
-export default function RouteMap({ jobs, onReorder, driveTimes, startDriveTime }) {
+function userLocationIcon() {
+  return L.divIcon({
+    className: '',
+    html: `<div style="background:#16a34a;color:white;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4)">📍</div>`,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+  })
+}
+
+export default function RouteMap({ jobs, onReorder, driveTimes, startDriveTime, userLocation }) {
   const [coords, setCoords] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -78,10 +87,14 @@ export default function RouteMap({ jobs, onReorder, driveTimes, startDriveTime }
   }
 
   const validCoords = coords.filter(c => c.latLng)
-  const center = validCoords.length > 0
-    ? [validCoords.reduce((s, c) => s + c.latLng[0], 0) / validCoords.length,
-       validCoords.reduce((s, c) => s + c.latLng[1], 0) / validCoords.length]
-    : [39.5, -98.35]
+  const userLatLng = userLocation ? [userLocation.lat, userLocation.lon] : null
+  const allPoints = userLatLng ? [userLatLng, ...validCoords.map(c => c.latLng)] : validCoords.map(c => c.latLng)
+  const center = userLatLng
+    ? userLatLng
+    : validCoords.length > 0
+      ? [validCoords.reduce((s, c) => s + c.latLng[0], 0) / validCoords.length,
+         validCoords.reduce((s, c) => s + c.latLng[1], 0) / validCoords.length]
+      : [39.5, -98.35]
 
   if (loading) return <div className="bg-white rounded-xl p-6 text-center text-gray-400">Loading map...</div>
 
@@ -90,6 +103,11 @@ export default function RouteMap({ jobs, onReorder, driveTimes, startDriveTime }
       <div className="rounded-xl overflow-hidden border border-gray-200 shadow-sm" style={{ height: '300px' }}>
         <MapContainer center={center} zoom={validCoords.length > 0 ? 11 : 4} style={{ height: '100%', width: '100%' }}>
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+          {userLatLng && (
+            <Marker position={userLatLng} icon={userLocationIcon()}>
+              <Popup><div className="text-sm font-semibold text-green-700">Your Location</div></Popup>
+            </Marker>
+          )}
           {coords.map((c, i) => c.latLng && (
             <Marker key={c.job.id} position={c.latLng} icon={numberIcon(i + 1)}>
               <Popup>
@@ -100,8 +118,8 @@ export default function RouteMap({ jobs, onReorder, driveTimes, startDriveTime }
               </Popup>
             </Marker>
           ))}
-          {validCoords.length > 1 && (
-            <Polyline positions={validCoords.map(c => c.latLng)} color="#2563eb" weight={2} dashArray="6" />
+          {allPoints.length > 1 && (
+            <Polyline positions={allPoints} color="#2563eb" weight={2} dashArray="6" />
           )}
         </MapContainer>
       </div>

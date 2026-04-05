@@ -353,6 +353,15 @@ export default function Home() {
   if (isTech) {
     return (
       <div className="min-h-screen bg-gray-50">
+        {adminView && (
+          <div className="bg-yellow-400 text-gray-900 px-4 py-2 flex items-center justify-between sticky top-0 z-20 text-sm font-semibold">
+            {adminView.preview
+              ? <span>👁 Admin Preview — viewing as yourself</span>
+              : <span>👁 Admin View — {adminView.company_name} as <span className="capitalize">{adminView.role}</span> ({adminView.user_name})</span>
+            }
+            <button onClick={exitAdminView} className="bg-gray-900 text-yellow-400 px-3 py-1 rounded-lg text-xs font-bold hover:bg-gray-800 transition">← Back to Admin</button>
+          </div>
+        )}
         <nav className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-10">
           <div>
             <span className="text-blue-600 font-bold text-lg">Pool Pilot</span>

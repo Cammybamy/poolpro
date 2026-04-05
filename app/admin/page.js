@@ -38,7 +38,6 @@ export default function AdminPanel() {
       {/* Header */}
       <div className="bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between sticky top-0 z-20">
         <div className="flex items-center gap-4">
-          <Link href="/" className="text-gray-500 hover:text-white text-sm">← App</Link>
           <div className="flex items-center gap-2">
             <span className="text-yellow-400 font-bold text-lg">Pool Pilot</span>
             <span className="bg-yellow-400 text-gray-900 text-xs font-bold px-2 py-0.5 rounded-full">SUPER ADMIN</span>
@@ -52,7 +51,15 @@ export default function AdminPanel() {
             </button>
           ))}
         </div>
-        <div className="text-xs text-gray-500">{profile.full_name}</div>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-500 hidden md:block">{profile.full_name}</span>
+          <button
+            onClick={() => { sessionStorage.setItem('adminPreview', 'true'); router.push('/') }}
+            className="bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white px-3 py-1.5 rounded-lg text-sm font-medium transition border border-gray-700"
+          >
+            👁 Preview App
+          </button>
+        </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-8">

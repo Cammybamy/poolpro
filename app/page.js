@@ -114,6 +114,13 @@ export default function Home() {
       return
     }
     const p = await getProfile()
+    // Super admins go straight to the admin panel unless previewing
+    const isPreviewing = typeof window !== 'undefined' && sessionStorage.getItem('adminPreview') === 'true'
+    if (p?.super_admin && !isPreviewing) {
+      router.push('/admin')
+      return
+    }
+    if (p?.super_admin && isPreviewing) setAdminView({ preview: true })
     setProfile(p)
     if (p?.role === 'technician') {
       fetchTechJobs(p.full_name)
@@ -123,7 +130,8 @@ export default function Home() {
 
   function exitAdminView() {
     sessionStorage.removeItem('adminView')
-    window.location.reload()
+    sessionStorage.removeItem('adminPreview')
+    router.push('/admin')
   }
 
   async function fetchTechJobs(name) {
@@ -479,8 +487,11 @@ export default function Home() {
     <div className="min-h-screen bg-gray-50">
       {adminView && (
         <div className="bg-yellow-400 text-gray-900 px-4 py-2 flex items-center justify-between sticky top-0 z-20 text-sm font-semibold">
-          <span>👁 Admin View — {adminView.company_name} as <span className="capitalize">{adminView.role}</span> ({adminView.user_name})</span>
-          <button onClick={exitAdminView} className="bg-gray-900 text-yellow-400 px-3 py-1 rounded-lg text-xs font-bold hover:bg-gray-800 transition">Exit View</button>
+          {adminView.preview
+            ? <span>👁 Admin Preview — viewing as yourself</span>
+            : <span>👁 Admin View — {adminView.company_name} as <span className="capitalize">{adminView.role}</span> ({adminView.user_name})</span>
+          }
+          <button onClick={exitAdminView} className="bg-gray-900 text-yellow-400 px-3 py-1 rounded-lg text-xs font-bold hover:bg-gray-800 transition">← Back to Admin</button>
         </div>
       )}
       <nav className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-10">

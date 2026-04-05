@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 
 export async function POST(req) {
-  const { email, full_name } = await req.json()
+  const { email, full_name, tier = 'admin' } = await req.json()
 
   if (!email || !full_name) {
     return Response.json({ error: 'Name and email are required' }, { status: 400 })
@@ -26,6 +26,7 @@ export async function POST(req) {
     full_name,
     email,
     super_admin: true,
+    admin_tier: tier,
     role: 'owner',
     company_id: null
   }])

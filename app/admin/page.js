@@ -31,7 +31,16 @@ export default function AdminPanel() {
     setStats({ companies: c.count || 0, users: u.count || 0, jobs: j.count || 0, leads: l.count || 0 })
   }
 
+  const isSuper = profile.admin_tier === 'super'
+
   if (!profile) return <div className="min-h-screen bg-gray-950 flex items-center justify-center text-gray-400">Loading...</div>
+
+  const navTabs = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'companies', label: 'Companies' },
+    { id: 'leads', label: 'Leads' },
+    ...(isSuper ? [{ id: 'admins', label: '⚙ Admins' }] : []),
+  ]
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
@@ -40,16 +49,13 @@ export default function AdminPanel() {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <span className="text-yellow-400 font-bold text-lg">Pool Pilot</span>
-            <span className="bg-yellow-400 text-gray-900 text-xs font-bold px-2 py-0.5 rounded-full">SUPER ADMIN</span>
+            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isSuper ? 'bg-yellow-400 text-gray-900' : 'bg-gray-700 text-gray-300'}`}>
+              {isSuper ? 'SUPER ADMIN' : 'ADMIN'}
+            </span>
           </div>
         </div>
         <div className="flex items-center gap-1">
-          {[
-            { id: 'overview', label: 'Overview' },
-            { id: 'companies', label: 'Companies' },
-            { id: 'leads', label: 'Leads' },
-            { id: 'admins', label: '⚙ Admins' },
-          ].map(t => (
+          {navTabs.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`px-4 py-1.5 rounded-lg text-sm font-medium transition ${tab === t.id ? 'bg-yellow-400 text-gray-900' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}>
               {t.label}
@@ -68,17 +74,17 @@ export default function AdminPanel() {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-8">
-        {tab === 'overview' && <OverviewTab stats={stats} onNavigate={setTab} />}
+        {tab === 'overview' && <OverviewTab stats={stats} onNavigate={setTab} isSuper={isSuper} />}
         {tab === 'companies' && <CompaniesTab />}
         {tab === 'leads' && <LeadsTab />}
-        {tab === 'admins' && <SuperAdminsTab />}
+        {tab === 'admins' && isSuper && <SuperAdminsTab />}
       </div>
     </div>
   )
 }
 
 // ─── Overview ─────────────────────────────────────────────────────────────────
-function OverviewTab({ stats, onNavigate }) {
+function OverviewTab({ stats, onNavigate, isSuper }) {
   return (
     <div>
       <h2 className="text-2xl font-bold mb-6">System Overview</h2>
@@ -103,10 +109,12 @@ function OverviewTab({ stats, onNavigate }) {
             className="bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-xl text-sm font-semibold transition">
             + Create New Company
           </button>
-          <button onClick={() => onNavigate('admins')}
-            className="bg-yellow-500 hover:bg-yellow-400 text-gray-900 py-3 px-4 rounded-xl text-sm font-semibold transition">
-            ⚙ Manage Admins
-          </button>
+          {isSuper && (
+            <button onClick={() => onNavigate('admins')}
+              className="bg-yellow-500 hover:bg-yellow-400 text-gray-900 py-3 px-4 rounded-xl text-sm font-semibold transition">
+              ⚙ Manage Admins
+            </button>
+          )}
           <button onClick={() => onNavigate('leads')}
             className="bg-gray-800 hover:bg-gray-700 text-white py-3 px-4 rounded-xl text-sm font-semibold transition">
             View Leads
@@ -726,14 +734,14 @@ function LeadsTab() {
 function SuperAdminsTab() {
   const [admins, setAdmins] = useState([])
   const [showInvite, setShowInvite] = useState(false)
-  const [form, setForm] = useState({ full_name: '', email: '' })
+  const [form, setForm] = useState({ full_name: '', email: '', tier: 'admin' })
   const [msg, setMsg] = useState('')
   const [loading, setLoading] = useState(false)
 
   useEffect(() => { fetchAdmins() }, [])
 
   async function fetchAdmins() {
-    const { data } = await supabase.from('profiles').select('*').eq('super_admin', true).order('full_name')
+    const { data } = await supabase.from('profiles').select('*').eq('super_admin', true).order('admin_tier').order('full_name')
     setAdmins(data || [])
   }
 
@@ -747,22 +755,37 @@ function SuperAdminsTab() {
     })
     const result = await res.json()
     if (result.error) { setMsg('Error: ' + result.error) }
-    else { setMsg(`Invite sent to ${form.email}`); setForm({ full_name: '', email: '' }); setShowInvite(false); fetchAdmins() }
+    else { setMsg(`Invite sent to ${form.email}`); setForm({ full_name: '', email: '', tier: 'admin' }); setShowInvite(false); fetchAdmins() }
     setLoading(false)
   }
 
-  async function revokeAdmin(id) {
-    if (!confirm('Revoke super admin access for this user?')) return
-    await supabase.from('profiles').update({ super_admin: false }).eq('id', id)
+  async function promote(id) {
+    if (!confirm('Promote this admin to Super Admin? They will be able to manage other admins.')) return
+    await supabase.from('profiles').update({ admin_tier: 'super' }).eq('id', id)
     fetchAdmins()
   }
+
+  async function demote(id) {
+    if (!confirm('Demote this Super Admin to regular Admin? They will lose the ability to manage other admins.')) return
+    await supabase.from('profiles').update({ admin_tier: 'admin' }).eq('id', id)
+    fetchAdmins()
+  }
+
+  async function revokeAdmin(id) {
+    if (!confirm('Remove admin access entirely? This cannot be undone easily.')) return
+    await supabase.from('profiles').update({ super_admin: false, admin_tier: 'admin' }).eq('id', id)
+    fetchAdmins()
+  }
+
+  const superAdmins = admins.filter(a => a.admin_tier === 'super')
+  const regularAdmins = admins.filter(a => a.admin_tier !== 'super')
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-2xl font-bold">Super Admins</h2>
-          <p className="text-gray-500 text-sm mt-1">These accounts have full access to the admin panel and all company data.</p>
+          <h2 className="text-2xl font-bold">Admin Management</h2>
+          <p className="text-gray-500 text-sm mt-1">Only Super Admins can manage this panel.</p>
         </div>
         <button onClick={() => setShowInvite(!showInvite)}
           className="bg-yellow-400 hover:bg-yellow-300 text-gray-900 px-4 py-2 rounded-xl text-sm font-bold transition">
@@ -778,8 +801,7 @@ function SuperAdminsTab() {
 
       {showInvite && (
         <div className="bg-gray-900 border border-yellow-500/30 rounded-2xl p-6 mb-6 space-y-3">
-          <h3 className="font-semibold text-yellow-400 text-sm">Invite New Super Admin</h3>
-          <p className="text-gray-500 text-xs">They'll receive an email invite and will have full admin access once they set up their account.</p>
+          <h3 className="font-semibold text-yellow-400 text-sm">Invite New Admin</h3>
           <div className="grid grid-cols-2 gap-3">
             <input
               className="bg-gray-800 border border-gray-700 rounded-xl p-3 text-white placeholder-gray-500 focus:outline-none focus:border-yellow-400"
@@ -795,30 +817,86 @@ function SuperAdminsTab() {
               onChange={e => setForm({ ...form, email: e.target.value })}
             />
           </div>
+          <div>
+            <label className="text-gray-400 text-xs mb-1 block">Access Level</label>
+            <select
+              className="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-white focus:outline-none focus:border-yellow-400"
+              value={form.tier}
+              onChange={e => setForm({ ...form, tier: e.target.value })}
+            >
+              <option value="admin">Admin — manage companies & users, cannot manage other admins</option>
+              <option value="super">Super Admin — full access including managing other admins</option>
+            </select>
+          </div>
           <button onClick={sendInvite} disabled={loading}
             className="w-full bg-yellow-400 hover:bg-yellow-300 text-gray-900 py-2.5 rounded-xl font-bold transition disabled:opacity-50">
-            {loading ? 'Sending...' : 'Send Admin Invite'}
+            {loading ? 'Sending...' : 'Send Invite'}
           </button>
         </div>
       )}
 
-      <div className="space-y-3">
-        {admins.map(a => (
-          <div key={a.id} className="bg-gray-900 border border-yellow-500/20 rounded-xl p-5 flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-white">{a.full_name}</span>
-                <span className="bg-yellow-400 text-gray-900 text-xs font-bold px-2 py-0.5 rounded-full">SUPER ADMIN</span>
+      {/* Super Admins */}
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-sm font-bold text-yellow-400">SUPER ADMINS</span>
+          <span className="text-gray-600 text-xs">— full access + manage other admins</span>
+        </div>
+        <div className="space-y-3">
+          {superAdmins.map(a => (
+            <div key={a.id} className="bg-gray-900 border border-yellow-500/30 rounded-xl p-5 flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-white">{a.full_name}</span>
+                  <span className="bg-yellow-400 text-gray-900 text-xs font-bold px-2 py-0.5 rounded-full">SUPER ADMIN</span>
+                </div>
+                <div className="text-gray-500 text-sm mt-0.5">{a.email}</div>
               </div>
-              <div className="text-gray-500 text-sm mt-0.5">{a.email}</div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => demote(a.id)}
+                  className="text-gray-400 hover:text-white hover:bg-gray-800 px-3 py-1.5 rounded-lg text-xs transition">
+                  Demote to Admin
+                </button>
+                <button onClick={() => revokeAdmin(a.id)}
+                  className="text-red-500 hover:text-red-400 hover:bg-red-950 px-3 py-1.5 rounded-lg text-xs transition">
+                  Remove Access
+                </button>
+              </div>
             </div>
-            <button onClick={() => revokeAdmin(a.id)}
-              className="text-red-500 hover:text-red-400 hover:bg-red-950 px-3 py-1.5 rounded-lg text-xs transition">
-              Revoke Access
-            </button>
-          </div>
-        ))}
-        {admins.length === 0 && <div className="text-gray-600 text-center py-8">No super admins found</div>}
+          ))}
+          {superAdmins.length === 0 && <div className="text-gray-600 text-sm py-3">No super admins</div>}
+        </div>
+      </div>
+
+      {/* Regular Admins */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-sm font-bold text-gray-400">ADMINS</span>
+          <span className="text-gray-600 text-xs">— manage companies & users only</span>
+        </div>
+        <div className="space-y-3">
+          {regularAdmins.map(a => (
+            <div key={a.id} className="bg-gray-900 border border-gray-800 rounded-xl p-5 flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-white">{a.full_name}</span>
+                  <span className="bg-gray-700 text-gray-300 text-xs font-bold px-2 py-0.5 rounded-full">ADMIN</span>
+                </div>
+                <div className="text-gray-500 text-sm mt-0.5">{a.email}</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => promote(a.id)}
+                  className="text-yellow-400 hover:text-yellow-300 hover:bg-yellow-400/10 px-3 py-1.5 rounded-lg text-xs transition">
+                  Promote to Super Admin
+                </button>
+                <button onClick={() => revokeAdmin(a.id)}
+                  className="text-red-500 hover:text-red-400 hover:bg-red-950 px-3 py-1.5 rounded-lg text-xs transition">
+                  Remove Access
+                </button>
+              </div>
+            </div>
+          ))}
+          {regularAdmins.length === 0 && <div className="text-gray-600 text-sm py-3">No admins</div>}
+        </div>
       </div>
     </div>
   )

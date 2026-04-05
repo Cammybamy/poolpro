@@ -312,6 +312,8 @@ function CompanyDetail({ companyId, onBack }) {
 // ─── Team Sub-tab ─────────────────────────────────────────────────────────────
 function TeamTab({ users, companyId, onViewAs, onRefresh }) {
   const [showInvite, setShowInvite] = useState(false)
+  const [showForceDelete, setShowForceDelete] = useState(false)
+  const [forceEmail, setForceEmail] = useState('')
   const [form, setForm] = useState({ email: '', full_name: '', role: 'technician' })
   const [msg, setMsg] = useState('')
   const [loading, setLoading] = useState(false)
@@ -345,12 +347,39 @@ function TeamTab({ users, companyId, onViewAs, onRefresh }) {
     <div>
       <div className="flex items-center justify-between mb-4">
         <span className="text-gray-400 text-sm">{users.length} team member{users.length !== 1 ? 's' : ''}</span>
-        <button onClick={() => setShowInvite(!showInvite)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition">
-          + Invite Member
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => { setShowForceDelete(!showForceDelete); setShowInvite(false) }}
+            className="bg-gray-800 hover:bg-gray-700 text-gray-400 px-3 py-1.5 rounded-lg text-xs transition border border-gray-700">
+            🔧 Force Delete
+          </button>
+          <button onClick={() => { setShowInvite(!showInvite); setShowForceDelete(false) }}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition">
+            + Invite Member
+          </button>
+        </div>
       </div>
 
       {msg && <div className={`rounded-xl p-3 mb-4 text-sm ${msg.startsWith('Error') ? 'bg-red-900 text-red-300' : 'bg-green-900 text-green-300'}`}>{msg}</div>}
+
+      {showForceDelete && (
+        <div className="bg-gray-900 border border-red-500/30 rounded-xl p-4 mb-4 space-y-2">
+          <p className="text-red-400 text-xs font-semibold">🔧 Force Delete by Email</p>
+          <p className="text-gray-500 text-xs">Clears a stuck auth account so the email can be re-invited.</p>
+          <div className="flex gap-2">
+            <input className="flex-1 bg-gray-800 border border-gray-700 rounded-lg p-2 text-white placeholder-gray-500 text-sm focus:outline-none"
+              placeholder="user@email.com" type="email" value={forceEmail} onChange={e => setForceEmail(e.target.value)} />
+            <button onClick={async () => {
+              if (!forceEmail) return
+              const res = await fetch('/api/admin/delete-user', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: forceEmail }) })
+              const result = await res.json()
+              if (result.error) setMsg('Error: ' + result.error)
+              else { setMsg(`Deleted — you can now re-invite ${forceEmail}`); setForceEmail(''); setShowForceDelete(false); onRefresh() }
+            }} className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-sm font-semibold transition">
+              Delete
+            </button>
+          </div>
+        </div>
+      )}
 
       {showInvite && (
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-4 space-y-3">
@@ -738,7 +767,9 @@ function LeadsTab() {
 function SuperAdminsTab() {
   const [admins, setAdmins] = useState([])
   const [showInvite, setShowInvite] = useState(false)
+  const [showForceDelete, setShowForceDelete] = useState(false)
   const [form, setForm] = useState({ full_name: '', email: '', tier: 'admin' })
+  const [forceEmail, setForceEmail] = useState('')
   const [msg, setMsg] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -785,6 +816,21 @@ function SuperAdminsTab() {
     fetchAdmins()
   }
 
+  async function forceDeleteByEmail() {
+    if (!forceEmail) { setMsg('Enter an email'); return }
+    if (!confirm(`Force delete auth account for ${forceEmail}? This removes them from the system completely.`)) return
+    setLoading(true); setMsg('')
+    const res = await fetch('/api/admin/delete-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: forceEmail })
+    })
+    const result = await res.json()
+    if (result.error) setMsg('Error: ' + result.error)
+    else { setMsg(`Deleted ${forceEmail} — you can now re-invite them`); setForceEmail(''); setShowForceDelete(false) }
+    setLoading(false)
+  }
+
   const superAdmins = admins.filter(a => a.admin_tier === 'super')
   const regularAdmins = admins.filter(a => a.admin_tier !== 'super')
 
@@ -795,11 +841,37 @@ function SuperAdminsTab() {
           <h2 className="text-2xl font-bold">Admin Management</h2>
           <p className="text-gray-500 text-sm mt-1">Only Super Admins can manage this panel.</p>
         </div>
-        <button onClick={() => setShowInvite(!showInvite)}
-          className="bg-yellow-400 hover:bg-yellow-300 text-gray-900 px-4 py-2 rounded-xl text-sm font-bold transition">
-          + Invite Admin
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => { setShowForceDelete(!showForceDelete); setShowInvite(false) }}
+            className="bg-gray-800 hover:bg-gray-700 text-gray-300 px-4 py-2 rounded-xl text-sm font-medium transition border border-gray-700">
+            🔧 Force Delete
+          </button>
+          <button onClick={() => { setShowInvite(!showInvite); setShowForceDelete(false) }}
+            className="bg-yellow-400 hover:bg-yellow-300 text-gray-900 px-4 py-2 rounded-xl text-sm font-bold transition">
+            + Invite Admin
+          </button>
+        </div>
       </div>
+
+      {showForceDelete && (
+        <div className="bg-gray-900 border border-red-500/30 rounded-2xl p-6 mb-6 space-y-3">
+          <h3 className="font-semibold text-red-400 text-sm">🔧 Force Delete Auth Account by Email</h3>
+          <p className="text-gray-500 text-xs">Use this when a user was removed but their email still shows as "already registered". This clears them from the auth system completely so they can be re-invited.</p>
+          <div className="flex gap-3">
+            <input
+              className="flex-1 bg-gray-800 border border-gray-700 rounded-xl p-3 text-white placeholder-gray-500 focus:outline-none focus:border-red-400"
+              placeholder="user@email.com"
+              type="email"
+              value={forceEmail}
+              onChange={e => setForceEmail(e.target.value)}
+            />
+            <button onClick={forceDeleteByEmail} disabled={loading}
+              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl font-semibold text-sm transition disabled:opacity-50">
+              {loading ? 'Deleting...' : 'Delete'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {msg && (
         <div className={`rounded-xl p-3 mb-4 text-sm ${msg.startsWith('Error') ? 'bg-red-900 text-red-300' : 'bg-green-900 text-green-300'}`}>

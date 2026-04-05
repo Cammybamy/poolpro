@@ -31,9 +31,9 @@ export default function AdminPanel() {
     setStats({ companies: c.count || 0, users: u.count || 0, jobs: j.count || 0, leads: l.count || 0 })
   }
 
-  const isSuper = profile.admin_tier === 'super'
-
   if (!profile) return <div className="min-h-screen bg-gray-950 flex items-center justify-center text-gray-400">Loading...</div>
+
+  const isSuper = profile.admin_tier === 'super'
 
   const navTabs = [
     { id: 'overview', label: 'Overview' },

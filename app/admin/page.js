@@ -44,10 +44,15 @@ export default function AdminPanel() {
           </div>
         </div>
         <div className="flex items-center gap-1">
-          {['overview', 'companies', 'leads'].map(t => (
-            <button key={t} onClick={() => setTab(t)}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium capitalize transition ${tab === t ? 'bg-yellow-400 text-gray-900' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}>
-              {t}
+          {[
+            { id: 'overview', label: 'Overview' },
+            { id: 'companies', label: 'Companies' },
+            { id: 'leads', label: 'Leads' },
+            { id: 'admins', label: '⚙ Admins' },
+          ].map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition ${tab === t.id ? 'bg-yellow-400 text-gray-900' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}>
+              {t.label}
             </button>
           ))}
         </div>
@@ -66,6 +71,7 @@ export default function AdminPanel() {
         {tab === 'overview' && <OverviewTab stats={stats} onNavigate={setTab} />}
         {tab === 'companies' && <CompaniesTab />}
         {tab === 'leads' && <LeadsTab />}
+        {tab === 'admins' && <SuperAdminsTab />}
       </div>
     </div>
   )
@@ -92,18 +98,22 @@ function OverviewTab({ stats, onNavigate }) {
       </div>
       <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
         <h3 className="font-semibold text-gray-300 mb-3">Quick Actions</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <button onClick={() => onNavigate('companies')}
             className="bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-xl text-sm font-semibold transition">
             + Create New Company
           </button>
+          <button onClick={() => onNavigate('admins')}
+            className="bg-yellow-500 hover:bg-yellow-400 text-gray-900 py-3 px-4 rounded-xl text-sm font-semibold transition">
+            ⚙ Manage Admins
+          </button>
           <button onClick={() => onNavigate('leads')}
             className="bg-gray-800 hover:bg-gray-700 text-white py-3 px-4 rounded-xl text-sm font-semibold transition">
-            View Interest Form Leads
+            View Leads
           </button>
           <button onClick={() => onNavigate('companies')}
             className="bg-gray-800 hover:bg-gray-700 text-white py-3 px-4 rounded-xl text-sm font-semibold transition">
-            Browse All Companies
+            Browse Companies
           </button>
         </div>
       </div>
@@ -708,6 +718,108 @@ function LeadsTab() {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Super Admins Tab ─────────────────────────────────────────────────────────
+function SuperAdminsTab() {
+  const [admins, setAdmins] = useState([])
+  const [showInvite, setShowInvite] = useState(false)
+  const [form, setForm] = useState({ full_name: '', email: '' })
+  const [msg, setMsg] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => { fetchAdmins() }, [])
+
+  async function fetchAdmins() {
+    const { data } = await supabase.from('profiles').select('*').eq('super_admin', true).order('full_name')
+    setAdmins(data || [])
+  }
+
+  async function sendInvite() {
+    if (!form.full_name || !form.email) { setMsg('Name and email are required'); return }
+    setLoading(true); setMsg('')
+    const res = await fetch('/api/invite-super-admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form)
+    })
+    const result = await res.json()
+    if (result.error) { setMsg('Error: ' + result.error) }
+    else { setMsg(`Invite sent to ${form.email}`); setForm({ full_name: '', email: '' }); setShowInvite(false); fetchAdmins() }
+    setLoading(false)
+  }
+
+  async function revokeAdmin(id) {
+    if (!confirm('Revoke super admin access for this user?')) return
+    await supabase.from('profiles').update({ super_admin: false }).eq('id', id)
+    fetchAdmins()
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-2xl font-bold">Super Admins</h2>
+          <p className="text-gray-500 text-sm mt-1">These accounts have full access to the admin panel and all company data.</p>
+        </div>
+        <button onClick={() => setShowInvite(!showInvite)}
+          className="bg-yellow-400 hover:bg-yellow-300 text-gray-900 px-4 py-2 rounded-xl text-sm font-bold transition">
+          + Invite Admin
+        </button>
+      </div>
+
+      {msg && (
+        <div className={`rounded-xl p-3 mb-4 text-sm ${msg.startsWith('Error') ? 'bg-red-900 text-red-300' : 'bg-green-900 text-green-300'}`}>
+          {msg}
+        </div>
+      )}
+
+      {showInvite && (
+        <div className="bg-gray-900 border border-yellow-500/30 rounded-2xl p-6 mb-6 space-y-3">
+          <h3 className="font-semibold text-yellow-400 text-sm">Invite New Super Admin</h3>
+          <p className="text-gray-500 text-xs">They'll receive an email invite and will have full admin access once they set up their account.</p>
+          <div className="grid grid-cols-2 gap-3">
+            <input
+              className="bg-gray-800 border border-gray-700 rounded-xl p-3 text-white placeholder-gray-500 focus:outline-none focus:border-yellow-400"
+              placeholder="Full Name *"
+              value={form.full_name}
+              onChange={e => setForm({ ...form, full_name: e.target.value })}
+            />
+            <input
+              className="bg-gray-800 border border-gray-700 rounded-xl p-3 text-white placeholder-gray-500 focus:outline-none focus:border-yellow-400"
+              placeholder="Email *"
+              type="email"
+              value={form.email}
+              onChange={e => setForm({ ...form, email: e.target.value })}
+            />
+          </div>
+          <button onClick={sendInvite} disabled={loading}
+            className="w-full bg-yellow-400 hover:bg-yellow-300 text-gray-900 py-2.5 rounded-xl font-bold transition disabled:opacity-50">
+            {loading ? 'Sending...' : 'Send Admin Invite'}
+          </button>
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {admins.map(a => (
+          <div key={a.id} className="bg-gray-900 border border-yellow-500/20 rounded-xl p-5 flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-white">{a.full_name}</span>
+                <span className="bg-yellow-400 text-gray-900 text-xs font-bold px-2 py-0.5 rounded-full">SUPER ADMIN</span>
+              </div>
+              <div className="text-gray-500 text-sm mt-0.5">{a.email}</div>
+            </div>
+            <button onClick={() => revokeAdmin(a.id)}
+              className="text-red-500 hover:text-red-400 hover:bg-red-950 px-3 py-1.5 rounded-lg text-xs transition">
+              Revoke Access
+            </button>
+          </div>
+        ))}
+        {admins.length === 0 && <div className="text-gray-600 text-center py-8">No super admins found</div>}
+      </div>
     </div>
   )
 }

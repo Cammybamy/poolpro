@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
 export default function Landing() {
@@ -7,6 +7,19 @@ export default function Landing() {
   const [submitted, setSubmitted] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [inviteError, setInviteError] = useState('')
+
+  useEffect(() => {
+    // Detect Supabase error redirected to landing (e.g. expired invite link)
+    const hash = window.location.hash
+    if (hash.includes('error=')) {
+      const params = new URLSearchParams(hash.replace('#', ''))
+      const desc = params.get('error_description')
+      if (desc?.includes('expired') || desc?.includes('invalid')) {
+        setInviteError('Your invite link has expired. Contact your admin to send a new one.')
+      }
+    }
+  }, [])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -30,6 +43,13 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-white">
+
+      {inviteError && (
+        <div className="bg-red-600 text-white px-6 py-4 text-center">
+          <p className="font-semibold">{inviteError}</p>
+          <p className="text-sm text-red-200 mt-1">Already have an account? <Link href="/login" className="underline text-white">Log in here</Link></p>
+        </div>
+      )}
 
       {/* Nav */}
       <nav className="border-b border-gray-100 px-6 py-4 flex items-center justify-between max-w-6xl mx-auto">

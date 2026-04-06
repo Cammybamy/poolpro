@@ -1,5 +1,12 @@
 import { createClient } from '@supabase/supabase-js'
 
+function generateTempPassword() {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
+  let pass = ''
+  for (let i = 0; i < 10; i++) pass += chars[Math.floor(Math.random() * chars.length)]
+  return pass + '1!'
+}
+
 export async function POST(req) {
   const { email, full_name, tier = 'admin' } = await req.json()
 
@@ -12,9 +19,12 @@ export async function POST(req) {
     process.env.SUPABASE_SERVICE_ROLE_KEY
   )
 
-  const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/join`,
-    data: { full_name, role: 'super_admin' }
+  const tempPassword = generateTempPassword()
+
+  const { data, error } = await supabase.auth.admin.createUser({
+    email,
+    password: tempPassword,
+    email_confirm: true
   })
 
   if (error) {
@@ -28,12 +38,13 @@ export async function POST(req) {
     super_admin: true,
     admin_tier: tier,
     role: 'owner',
-    company_id: null
+    company_id: null,
+    needs_password_change: true
   }])
 
   if (profileError) {
     return Response.json({ error: profileError.message }, { status: 400 })
   }
 
-  return Response.json({ success: true })
+  return Response.json({ success: true, tempPassword })
 }

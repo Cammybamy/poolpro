@@ -121,6 +121,7 @@ export default function Home() {
       return
     }
     if (p?.super_admin && isPreviewing) setAdminView({ preview: true })
+    if (p?.needs_password_change) { router.push('/join?setup=1'); return }
     setProfile(p)
     if (p?.role === 'technician') {
       fetchTechJobs(p.full_name)

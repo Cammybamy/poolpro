@@ -59,7 +59,7 @@ export default function Users() {
       if (result.error) {
         setMessage('Error: ' + result.error)
       } else {
-        setMessage(`Invite sent to ${form.email}! They'll receive an email to set up their account.`)
+        setMessage(`✅ Account created! Temp password: ${result.tempPassword} — share this with ${form.full_name} directly so they can log in.`)
         setForm({ email: '', full_name: '', role: 'technician' })
         setShowForm(false)
         fetchUsers(profile.company_id)

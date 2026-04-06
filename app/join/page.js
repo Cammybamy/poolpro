@@ -15,6 +15,13 @@ function JoinForm() {
 
   useEffect(() => {
     async function init() {
+      // Direct setup flow — user is already logged in, just needs to set password
+      const setup = searchParams.get('setup')
+      if (setup) {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session) { await loadName(); setStatus('ready'); return }
+      }
+
       // Try code-based exchange first (PKCE flow)
       const code = searchParams.get('code')
       if (code) {
@@ -64,7 +71,7 @@ function JoinForm() {
 
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
-        await supabase.from('profiles').update({ full_name: fullName }).eq('user_id', user.id)
+        await supabase.from('profiles').update({ full_name: fullName, needs_password_change: false }).eq('user_id', user.id)
       }
       router.push('/')
     } catch (e) {

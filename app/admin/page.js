@@ -324,7 +324,7 @@ function TeamTab({ users, companyId, onViewAs, onRefresh }) {
     const res = await fetch('/api/invite-user', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, company_id: companyId }) })
     const result = await res.json()
     if (result.error) setMsg('Error: ' + result.error)
-    else { setMsg('Invite sent!'); setForm({ email: '', full_name: '', role: 'technician' }); setShowInvite(false); onRefresh() }
+    else { setMsg(`✅ Account created! Temp password: ${result.tempPassword} — share this with ${form.full_name} directly.`); setForm({ email: '', full_name: '', role: 'technician' }); setShowInvite(false); onRefresh() }
     setLoading(false)
   }
 
@@ -790,7 +790,7 @@ function SuperAdminsTab() {
     })
     const result = await res.json()
     if (result.error) { setMsg('Error: ' + result.error) }
-    else { setMsg(`Invite sent to ${form.email}`); setForm({ full_name: '', email: '', tier: 'admin' }); setShowInvite(false); fetchAdmins() }
+    else { setMsg(`✅ Account created! Temp password: ${result.tempPassword} — share this with ${form.full_name} directly.`); setForm({ full_name: '', email: '', tier: 'admin' }); setShowInvite(false); fetchAdmins() }
     setLoading(false)
   }
 

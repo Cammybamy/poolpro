@@ -70,6 +70,14 @@ export default function Home() {
   const [selectedReportCustomer, setSelectedReportCustomer] = useState('')
   const [reportLogs, setReportLogs] = useState([])
 
+  // Team
+  const [teamUsers, setTeamUsers] = useState([])
+  const [showTeamForm, setShowTeamForm] = useState(false)
+  const [teamForm, setTeamForm] = useState({ email: '', full_name: '', role: 'technician' })
+  const [teamMessage, setTeamMessage] = useState('')
+  const [teamLoading, setTeamLoading] = useState(false)
+  const [teamJobStats, setTeamJobStats] = useState({})
+
   // Tech
   const [techTab, setTechTab] = useState('jobs')
   const [techTodayJobs, setTechTodayJobs] = useState([])
@@ -78,6 +86,7 @@ export default function Home() {
   const [techRouteJobs, setTechRouteJobs] = useState([])
 
   const [adminView, setAdminView] = useState(null)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => {
     loadProfile()
@@ -92,6 +101,7 @@ export default function Home() {
     if (activeTab === 'chemicals') fetchChemicals()
     if (activeTab === 'invoices') fetchInvoices()
     if (activeTab === 'reports') fetchReportCustomers()
+    if (activeTab === 'users') fetchTeamUsers()
   }, [activeTab, profile])
 
   useEffect(() => {
@@ -341,6 +351,46 @@ export default function Home() {
     setInvoices(data || [])
   }
 
+  async function fetchTeamUsers() {
+    const [usersRes, jobsRes] = await Promise.all([
+      supabase.from('profiles').select('*').eq('company_id', profile.company_id).order('full_name'),
+      supabase.from('jobs').select('technician, status')
+    ])
+    setTeamUsers(usersRes.data || [])
+    const stats = {}
+    ;(jobsRes.data || []).forEach(j => {
+      if (!j.technician) return
+      if (!stats[j.technician]) stats[j.technician] = { scheduled: 0, completed: 0 }
+      if (j.status === 'complete') stats[j.technician].completed++
+      else stats[j.technician].scheduled++
+    })
+    setTeamJobStats(stats)
+  }
+
+  async function sendTeamInvite() {
+    if (!teamForm.email || !teamForm.full_name) { setTeamMessage('Name and email are required'); return }
+    setTeamLoading(true)
+    setTeamMessage('')
+    try {
+      const res = await fetch('/api/invite-user', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: teamForm.email, full_name: teamForm.full_name, role: teamForm.role, company_id: profile.company_id }) })
+      const result = await res.json()
+      if (result.error) { setTeamMessage('Error: ' + result.error) }
+      else { setTeamMessage(`✅ Account created! Temp password: ${result.tempPassword} — share this with ${teamForm.full_name} directly.`); setTeamForm({ email: '', full_name: '', role: 'technician' }); setShowTeamForm(false); fetchTeamUsers() }
+    } catch (e) { setTeamMessage('Error: ' + e.message) }
+    setTeamLoading(false)
+  }
+
+  async function updateTeamRole(userId, newRole) {
+    await supabase.from('profiles').update({ role: newRole }).eq('id', userId)
+    fetchTeamUsers()
+  }
+
+  async function removeTeamUser(userId) {
+    if (!confirm('Remove this user? This will fully delete their account so they can be re-invited later.')) return
+    await fetch('/api/admin/delete-user', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profile_id: userId }) })
+    fetchTeamUsers()
+  }
+
   async function handleSignOut() {
     await supabase.auth.signOut()
     router.push('/login')
@@ -363,16 +413,16 @@ export default function Home() {
             <button onClick={exitAdminView} className="bg-gray-900 text-yellow-400 px-3 py-1 rounded-lg text-xs font-bold hover:bg-gray-800 transition">← Back to Admin</button>
           </div>
         )}
-        <nav className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-10">
+        <nav className="bg-slate-900 px-4 py-3 flex items-center justify-between sticky top-0 z-10">
           <div>
-            <span className="text-blue-600 font-bold text-lg">Pool Pilot</span>
-            <div className="text-xs text-gray-400">{profile.full_name} · Technician</div>
+            <span className="text-white font-bold text-lg">Pool Pilot</span>
+            <div className="text-xs text-slate-400">{profile.full_name} · Technician</div>
           </div>
           <div className="flex items-center gap-1">
-            <button onClick={() => setTechTab('jobs')} className={`px-3 py-1.5 text-sm rounded-lg transition ${techTab === 'jobs' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50'}`}>My Jobs</button>
-            <button onClick={() => { setTechTab('route'); fetchTechRoute(profile.full_name, techRouteDate) }} className={`px-3 py-1.5 text-sm rounded-lg transition ${techTab === 'route' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50'}`}>Route</button>
+            <button onClick={() => setTechTab('jobs')} className={`px-3 py-1.5 text-sm rounded-lg transition ${techTab === 'jobs' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>My Jobs</button>
+            <button onClick={() => { setTechTab('route'); fetchTechRoute(profile.full_name, techRouteDate) }} className={`px-3 py-1.5 text-sm rounded-lg transition ${techTab === 'route' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>Route</button>
           </div>
-          <button onClick={handleSignOut} className="text-sm text-gray-400 hover:text-gray-600">Sign Out</button>
+          <button onClick={handleSignOut} className="text-sm text-slate-400 hover:text-white">Sign Out</button>
         </nav>
 
         <div className="max-w-lg mx-auto p-4">
@@ -421,7 +471,7 @@ export default function Home() {
 
           {techTab === 'route' && (
             <div>
-              <h2 className="text-xl font-bold text-gray-800 mb-3">My Route</h2>
+              <h2 className="text-xl font-bold text-slate-800 mb-3">My Route</h2>
               <input
                 type="date"
                 className="w-full border rounded-xl p-3 text-gray-800 bg-white shadow-sm mb-3"
@@ -483,122 +533,247 @@ export default function Home() {
   }
 
   const tabs = [
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'customers', label: 'Customers' },
-    { id: 'jobs', label: 'Jobs' },
-    { id: 'route', label: 'Route' },
-    { id: 'chemicals', label: 'Chemicals' },
-    { id: 'invoices', label: 'Invoices' },
-    { id: 'reports', label: 'Reports' },
-    ...(profile.role === 'owner' || profile.role === 'manager' ? [{ id: 'users', label: 'Team' }] : []),
+    { id: 'dashboard', label: 'Dashboard', icon: '⊞' },
+    { id: 'customers', label: 'Customers', icon: '👥' },
+    { id: 'jobs', label: 'Jobs', icon: '📋' },
+    { id: 'route', label: 'Route', icon: '🗺️' },
+    { id: 'chemicals', label: 'Chemicals', icon: '🧪' },
+    { id: 'invoices', label: 'Invoices', icon: '🧾' },
+    { id: 'reports', label: 'Reports', icon: '📊' },
+    ...(profile.role === 'owner' || profile.role === 'manager' ? [{ id: 'users', label: 'Team', icon: '👤' }] : []),
   ]
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {adminView && (
-        <div className="bg-yellow-400 text-gray-900 px-4 py-2 flex items-center justify-between sticky top-0 z-20 text-sm font-semibold">
-          {adminView.preview
-            ? <span>👁 Admin Preview — viewing as yourself</span>
-            : <span>👁 Admin View — {adminView.company_name} as <span className="capitalize">{adminView.role}</span> ({adminView.user_name})</span>
-          }
-          <button onClick={exitAdminView} className="bg-gray-900 text-yellow-400 px-3 py-1 rounded-lg text-xs font-bold hover:bg-gray-800 transition">← Back to Admin</button>
+    <div className="min-h-screen bg-slate-50 lg:flex">
+
+      {/* Sidebar */}
+      <aside className={`fixed inset-y-0 left-0 z-30 w-64 bg-slate-900 flex flex-col transition-transform duration-200 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:static lg:translate-x-0`}>
+        <div className="px-5 py-5 border-b border-slate-800 flex items-center justify-between">
+          <div>
+            <div className="text-white font-bold text-lg leading-tight">Pool Pilot</div>
+            <div className="text-slate-400 text-xs mt-0.5">{profile.full_name} · <span className="capitalize">{profile.role}</span></div>
+          </div>
+          <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-slate-400 hover:text-white text-xl w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-800">✕</button>
         </div>
-      )}
-      <nav className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-10">
-        <div>
-          <span className="text-blue-600 font-bold text-lg">Pool Pilot</span>
-          <div className="text-xs text-gray-400">{profile.full_name} · <span className="capitalize">{profile.role}</span></div>
-        </div>
-        <div className="flex items-center gap-1 overflow-x-auto">
+
+        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
           {tabs.map(tab => (
             <button
               key={tab.id}
-              onClick={() => tab.id === 'users' ? router.push('/users') : setActiveTab(tab.id)}
-              className={`px-3 py-1.5 text-sm rounded-lg whitespace-nowrap transition ${activeTab === tab.id ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50'}`}
+              onClick={() => { setActiveTab(tab.id); setSidebarOpen(false) }}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition text-left ${activeTab === tab.id ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}
             >
+              <span className="text-base w-5 text-center leading-none flex-shrink-0">{tab.icon}</span>
               {tab.label}
             </button>
           ))}
-        </div>
-        {profile.super_admin && (
-          <button onClick={() => router.push('/admin')} className="text-xs bg-yellow-400 text-gray-900 px-2 py-1 rounded-lg font-bold whitespace-nowrap ml-1">Admin</button>
-        )}
-        <button onClick={handleSignOut} className="text-sm text-gray-400 hover:text-gray-600 whitespace-nowrap ml-2">Sign Out</button>
-      </nav>
+        </nav>
 
-      <div className="max-w-4xl mx-auto p-4">
+        <div className="px-3 py-4 border-t border-slate-800 space-y-0.5">
+          {profile.super_admin && (
+            <button onClick={() => router.push('/admin')} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-amber-400 hover:bg-slate-800 transition text-left">
+              <span className="text-base w-5 text-center leading-none flex-shrink-0">⚙️</span> Admin Panel
+            </button>
+          )}
+          <button onClick={handleSignOut} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-white transition text-left">
+            <span className="text-base w-5 text-center leading-none flex-shrink-0">↩</span> Sign Out
+          </button>
+        </div>
+      </aside>
+
+      {sidebarOpen && <div className="fixed inset-0 z-20 bg-black/50 lg:hidden" onClick={() => setSidebarOpen(false)} />}
+
+      {/* Main content */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        {adminView && (
+          <div className="bg-amber-400 text-gray-900 px-4 py-2 flex items-center justify-between text-sm font-semibold sticky top-0 z-10">
+            {adminView.preview
+              ? <span>👁 Admin Preview — viewing as yourself</span>
+              : <span>👁 Admin View — {adminView.company_name} as <span className="capitalize">{adminView.role}</span> ({adminView.user_name})</span>
+            }
+            <button onClick={exitAdminView} className="bg-gray-900 text-amber-400 px-3 py-1 rounded-lg text-xs font-bold hover:bg-gray-800 transition">← Back to Admin</button>
+          </div>
+        )}
+
+        <header className="lg:hidden bg-white border-b border-slate-200 px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
+          <button onClick={() => setSidebarOpen(true)} className="text-slate-600 text-xl w-9 h-9 flex items-center justify-center hover:bg-slate-100 rounded-lg">☰</button>
+          <span className="font-bold text-slate-800 text-lg">Pool Pilot</span>
+        </header>
+
+        <main className="flex-1 p-4 lg:p-6 overflow-auto">
+          <div className="max-w-7xl mx-auto">
 
         {activeTab === 'dashboard' && (
           <div>
-            <div className="mb-6">
-              <h2 className="text-2xl font-bold text-gray-800">Dashboard</h2>
-              <p className="text-gray-400 text-sm mt-1">{today}</p>
-              <p className="text-gray-500 text-sm">{profile.companies?.name} — <span className="capitalize">{profile.role}</span></p>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center">
-                <div className="text-3xl font-bold text-blue-600">{stats.todayJobs}</div>
-                <div className="text-gray-500 text-xs mt-1">Jobs Today</div>
+            {/* Header */}
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-xl font-bold text-slate-800">{profile.companies?.name}</h2>
+                <p className="text-slate-400 text-sm">{today} · <span className="capitalize">{profile.role}</span></p>
               </div>
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center">
-                <div className="text-3xl font-bold text-yellow-500">{stats.pendingJobs}</div>
-                <div className="text-gray-500 text-xs mt-1">Pending Jobs</div>
-              </div>
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center">
-                <div className="text-3xl font-bold text-green-600">{stats.customers}</div>
-                <div className="text-gray-500 text-xs mt-1">Customers</div>
-              </div>
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center">
-                <div className="text-3xl font-bold text-red-500">{stats.unpaidInvoices}</div>
-                <div className="text-gray-500 text-xs mt-1">Unpaid Invoices</div>
-              </div>
-            </div>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
-              <div className="flex justify-between items-start mb-3">
-                <h3 className="font-semibold text-gray-700">Revenue — Last 6 Months</h3>
-                <div className="text-right">
-                  <div className="text-xs text-gray-400">Monthly Forecast</div>
-                  <div className="text-lg font-bold text-green-600">${forecast.toFixed(2)}</div>
-                </div>
-              </div>
-              {monthlyRevenue.length === 0 && <p className="text-gray-400 text-sm">No invoice data yet</p>}
-              <div className="space-y-2">
-                {monthlyRevenue.map((row, i) => {
-                  const month = new Date(row.month).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
-                  const pct = row.potential > 0 ? Math.round((row.actual / row.potential) * 100) : 0
-                  return (
-                    <div key={i}>
-                      <div className="flex justify-between text-sm mb-1">
-                        <span className="text-gray-600">{month}</span>
-                        <span className="text-gray-800 font-medium">${Number(row.actual).toFixed(2)} <span className="text-gray-400 font-normal">/ ${Number(row.potential).toFixed(2)}</span></span>
-                      </div>
-                      <div className="w-full bg-gray-100 rounded-full h-2">
-                        <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${pct}%` }}></div>
-                      </div>
-                    </div>
-                  )
-                })}
+              <div className="text-right hidden md:block">
+                <div className="text-xs text-slate-400">Monthly Forecast</div>
+                <div className="text-2xl font-bold text-emerald-600">${forecast.toFixed(2)}</div>
               </div>
             </div>
 
-            {/* Weather Forecast */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
-              <h3 className="font-semibold text-gray-700 mb-3">Weather {weatherCity && <span className="text-gray-400 font-normal text-sm">— {weatherCity}</span>}</h3>
-              {weatherLoading && <p className="text-gray-400 text-sm text-center py-4">Loading forecast...</p>}
-              {weatherError && <p className="text-red-500 text-sm">{weatherError}</p>}
-              {weather.length > 0 && (
-                <div className="grid grid-cols-4 md:grid-cols-7 gap-2">
-                  {weather.map((day, i) => {
-                    const d = new Date(day.date + 'T12:00:00')
-                    const label = i === 0 ? 'Today' : d.toLocaleDateString('en-US', { weekday: 'short' })
-                    const emoji = { Clear: '☀️', Clouds: '⛅', Rain: '🌧️', Drizzle: '🌦️', Thunderstorm: '⛈️', Snow: '❄️', Mist: '🌫️', Fog: '🌫️', Haze: '🌫️' }[day.condition] || '🌤️'
+            {/* Stat Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+              {[
+                { value: stats.todayJobs, label: "Jobs Today", color: "text-blue-700", bg: "bg-blue-50", border: "border-blue-100", tab: 'jobs' },
+                { value: stats.pendingJobs, label: "Pending", color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-100", tab: 'jobs' },
+                { value: stats.customers, label: "Customers", color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-100", tab: 'customers' },
+                { value: stats.unpaidInvoices, label: "Unpaid Invoices", color: "text-rose-700", bg: "bg-rose-50", border: "border-rose-100", tab: 'invoices' },
+              ].map(s => (
+                <button key={s.label} onClick={() => setActiveTab(s.tab)}
+                  className={`bg-white rounded-xl border ${s.border} shadow-sm p-4 flex items-center gap-3 hover:shadow-md transition text-left`}>
+                  <div className={`${s.bg} rounded-lg p-2 flex-shrink-0`}>
+                    <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
+                  </div>
+                  <div className="text-sm text-slate-500 font-medium">{s.label}</div>
+                </button>
+              ))}
+            </div>
+
+            {/* Main Grid: Calendar + Right Panel */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+
+              {/* Calendar — takes 2/3 */}
+              <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="font-semibold text-slate-700">{calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h3>
+                  <div className="flex gap-1">
+                    <button onClick={() => { const m = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1); setCalendarMonth(m); fetchCalendarJobs(m) }} className="text-gray-400 hover:text-blue-600 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-50 text-lg">‹</button>
+                    <button onClick={() => { const m = new Date(); setCalendarMonth(m); fetchCalendarJobs(m) }} className="text-xs text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-50">Today</button>
+                    <button onClick={() => { const m = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1); setCalendarMonth(m); fetchCalendarJobs(m) }} className="text-gray-400 hover:text-blue-600 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-50 text-lg">›</button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-7 mb-1">
+                  {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => <div key={d} className="text-center text-xs font-semibold text-gray-400 py-1">{d}</div>)}
+                </div>
+                <div className="grid grid-cols-7 gap-0.5">
+                  {(() => {
+                    const year = calendarMonth.getFullYear()
+                    const month = calendarMonth.getMonth()
+                    const firstDay = new Date(year, month, 1).getDay()
+                    const daysInMonth = new Date(year, month + 1, 0).getDate()
+                    const todayStr = new Date().toISOString().split('T')[0]
+                    const cells = []
+                    for (let i = 0; i < firstDay; i++) cells.push(<div key={`e${i}`} />)
+                    for (let d = 1; d <= daysInMonth; d++) {
+                      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+                      const dayJobs = calendarJobs.filter(j => j.scheduled_date === dateStr)
+                      const isToday = dateStr === todayStr
+                      const isSelected = selectedDay === dateStr
+                      cells.push(
+                        <button key={d} onClick={() => setSelectedDay(isSelected ? null : dateStr)}
+                          className={`rounded-lg p-1 text-center transition aspect-square flex flex-col items-center justify-center ${isToday ? 'bg-blue-600 text-white' : isSelected ? 'bg-blue-50 border border-blue-300' : 'hover:bg-gray-50'}`}>
+                          <div className={`text-xs font-semibold leading-none ${isToday ? 'text-white' : 'text-gray-700'}`}>{d}</div>
+                          {dayJobs.length > 0 && (
+                            <div className={`text-xs font-bold leading-none mt-0.5 ${isToday ? 'text-blue-100' : 'text-blue-600'}`}>{dayJobs.length}</div>
+                          )}
+                        </button>
+                      )
+                    }
+                    return cells
+                  })()}
+                </div>
+                {selectedDay && (() => {
+                  const dayJobs = calendarJobs.filter(j => j.scheduled_date === selectedDay)
+                  return (
+                    <div className="mt-3 border-t pt-3">
+                      <p className="text-xs font-semibold text-gray-500 mb-2">{new Date(selectedDay + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+                      {dayJobs.length === 0 ? <p className="text-gray-400 text-sm">No jobs</p> : (
+                        <div className="space-y-1">
+                          {dayJobs.map(j => (
+                            <Link href={`/jobs/${j.id}`} key={j.id} className="flex justify-between items-center p-2 rounded-lg hover:bg-gray-50">
+                              <div>
+                                <span className="text-sm font-medium text-gray-800">{j.customers?.name}</span>
+                                {j.technician && <span className="text-xs text-gray-400 ml-2">— {j.technician}</span>}
+                              </div>
+                              <span className={j.status === 'complete' ? 'text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700' : 'text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700'}>{j.status}</span>
+                            </Link>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
+              </div>
+
+              {/* Right column: Today's Jobs + Unpaid Invoices */}
+              <div className="flex flex-col gap-4">
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex-1">
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="font-semibold text-slate-700">Today's Jobs</h3>
+                    <button onClick={() => setActiveTab('jobs')} className="text-blue-600 text-xs hover:underline">View all</button>
+                  </div>
+                  {todayJobs.length === 0 ? <p className="text-slate-400 text-sm">No jobs today</p> : (
+                    <div className="space-y-1.5 overflow-y-auto max-h-48">
+                      {todayJobs.map(job => (
+                        <Link href={`/jobs/${job.id}`} key={job.id} className="flex justify-between items-center p-2 rounded-lg hover:bg-gray-50">
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-gray-800 truncate">{job.customers?.name}</div>
+                            <div className="text-xs text-gray-400 truncate">{job.technician || 'Unassigned'}</div>
+                          </div>
+                          <span className={`ml-2 flex-shrink-0 text-xs px-2 py-0.5 rounded-full ${job.status === 'complete' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{job.status}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex-1">
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="font-semibold text-slate-700">Unpaid Invoices</h3>
+                    <button onClick={() => setActiveTab('invoices')} className="text-blue-600 text-xs hover:underline">View all</button>
+                  </div>
+                  {unpaidInvoices.length === 0 ? <p className="text-slate-400 text-sm">All clear</p> : (
+                    <div className="space-y-1.5 overflow-y-auto max-h-48">
+                      {unpaidInvoices.map(inv => (
+                        <Link href={`/invoices/${inv.id}`} key={inv.id} className="flex justify-between items-center p-2 rounded-lg hover:bg-gray-50">
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-gray-800 truncate">{inv.customers?.name}</div>
+                            <div className="text-xs text-gray-400">Due: {inv.due_date || '—'}</div>
+                          </div>
+                          <span className="ml-2 flex-shrink-0 text-sm font-semibold text-gray-800">${inv.amount}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Revenue — full width */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-4">
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="font-semibold text-slate-700 text-base">Revenue — Last 6 Months</h3>
+                {monthlyRevenue.length > 0 && (
+                  <div className="text-right">
+                    <div className="text-xs text-slate-400">Total Collected</div>
+                    <div className="text-lg font-bold text-emerald-600">${monthlyRevenue.reduce((s, r) => s + Number(r.actual), 0).toFixed(0)}</div>
+                  </div>
+                )}
+              </div>
+              {monthlyRevenue.length === 0 ? <p className="text-slate-400 text-sm">No invoice data yet</p> : (
+                <div className="space-y-4">
+                  {monthlyRevenue.map((row, i) => {
+                    const month = new Date(row.month).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+                    const pct = row.potential > 0 ? Math.round((row.actual / row.potential) * 100) : 0
                     return (
-                      <div key={day.date} className={`text-center rounded-xl p-2 ${i === 0 ? 'bg-blue-50 border border-blue-100' : 'bg-gray-50'}`}>
-                        <div className="text-xs font-semibold text-gray-500 mb-1">{label}</div>
-                        <div className="text-2xl mb-1">{emoji}</div>
-                        <div className="text-xs font-bold text-gray-800">{day.high}°</div>
-                        <div className="text-xs text-gray-400">{day.low}°</div>
-                        <div className="text-xs text-gray-400 mt-0.5 truncate">{day.condition}</div>
+                      <div key={i}>
+                        <div className="flex justify-between items-baseline mb-1.5">
+                          <span className="text-sm font-medium text-slate-600">{month}</span>
+                          <div className="text-right">
+                            <span className="text-base font-bold text-slate-800">${Number(row.actual).toFixed(0)}</span>
+                            <span className="text-sm text-slate-400 ml-1">/ ${Number(row.potential).toFixed(0)}</span>
+                            <span className={`ml-2 text-xs font-semibold px-1.5 py-0.5 rounded-full ${pct >= 80 ? 'bg-emerald-100 text-emerald-700' : pct >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>{pct}%</span>
+                          </div>
+                        </div>
+                        <div className="w-full bg-slate-100 rounded-full h-3">
+                          <div className={`h-3 rounded-full transition-all ${pct >= 80 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-400' : 'bg-rose-400'}`} style={{ width: `${pct}%` }}></div>
+                        </div>
                       </div>
                     )
                   })}
@@ -606,103 +781,30 @@ export default function Home() {
               )}
             </div>
 
-            {/* Calendar */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
-              <div className="flex justify-between items-center mb-3">
-                <h3 className="font-semibold text-gray-700">{calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h3>
-                <div className="flex gap-2">
-                  <button onClick={() => { const m = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1); setCalendarMonth(m); fetchCalendarJobs(m) }} className="text-gray-400 hover:text-blue-600 px-2 py-1 rounded-lg hover:bg-gray-50">‹</button>
-                  <button onClick={() => { const m = new Date(); setCalendarMonth(m); fetchCalendarJobs(m) }} className="text-xs text-blue-600 hover:underline px-2 py-1">Today</button>
-                  <button onClick={() => { const m = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1); setCalendarMonth(m); fetchCalendarJobs(m) }} className="text-gray-400 hover:text-blue-600 px-2 py-1 rounded-lg hover:bg-gray-50">›</button>
-                </div>
-              </div>
-              <div className="grid grid-cols-7 gap-1 mb-1">
-                {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => <div key={d} className="text-center text-xs font-semibold text-gray-400 py-1">{d}</div>)}
-              </div>
-              <div className="grid grid-cols-7 gap-1">
-                {(() => {
-                  const year = calendarMonth.getFullYear()
-                  const month = calendarMonth.getMonth()
-                  const firstDay = new Date(year, month, 1).getDay()
-                  const daysInMonth = new Date(year, month + 1, 0).getDate()
-                  const todayStr = new Date().toISOString().split('T')[0]
-                  const cells = []
-                  for (let i = 0; i < firstDay; i++) cells.push(<div key={`e${i}`} />)
-                  for (let d = 1; d <= daysInMonth; d++) {
-                    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-                    const dayJobs = calendarJobs.filter(j => j.scheduled_date === dateStr)
-                    const isToday = dateStr === todayStr
-                    const isSelected = selectedDay === dateStr
-                    cells.push(
-                      <button key={d} onClick={() => setSelectedDay(isSelected ? null : dateStr)} className={`rounded-lg p-1 text-center transition min-h-10 ${isToday ? 'bg-blue-600 text-white' : isSelected ? 'bg-blue-50 border border-blue-300' : 'hover:bg-gray-50'}`}>
-                        <div className={`text-xs font-semibold ${isToday ? 'text-white' : 'text-gray-700'}`}>{d}</div>
-                        {dayJobs.length > 0 && (
-                          <div className={`text-xs font-bold mt-0.5 ${isToday ? 'text-blue-100' : 'text-blue-600'}`}>{dayJobs.length} job{dayJobs.length > 1 ? 's' : ''}</div>
-                        )}
-                      </button>
+            {/* Weather — full width compact */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+              <h3 className="font-semibold text-slate-700 mb-3 text-sm">
+                Weather {weatherCity && <span className="text-slate-400 font-normal">— {weatherCity}</span>}
+              </h3>
+              {weatherLoading && <p className="text-slate-400 text-sm text-center py-2">Loading...</p>}
+              {weatherError && <p className="text-red-400 text-sm">{weatherError}</p>}
+              {weather.length > 0 && (
+                <div className="grid grid-cols-7 gap-2">
+                  {weather.map((day, i) => {
+                    const d = new Date(day.date + 'T12:00:00')
+                    const label = i === 0 ? 'Today' : d.toLocaleDateString('en-US', { weekday: 'short' })
+                    const emoji = { Clear: '☀️', Clouds: '⛅', Rain: '🌧️', Drizzle: '🌦️', Thunderstorm: '⛈️', Snow: '❄️', Mist: '🌫️', Fog: '🌫️', Haze: '🌫️' }[day.condition] || '🌤️'
+                    return (
+                      <div key={day.date} className={`text-center rounded-xl p-2 ${i === 0 ? 'bg-blue-50 border border-blue-100' : 'bg-slate-50'}`}>
+                        <div className="text-xs font-semibold text-slate-500 mb-1">{label}</div>
+                        <div className="text-xl mb-1">{emoji}</div>
+                        <div className="text-sm font-bold text-slate-800">{day.high}°</div>
+                        <div className="text-xs text-slate-400">{day.low}°</div>
+                      </div>
                     )
-                  }
-                  return cells
-                })()}
-              </div>
-              {selectedDay && (() => {
-                const dayJobs = calendarJobs.filter(j => j.scheduled_date === selectedDay)
-                return dayJobs.length > 0 ? (
-                  <div className="mt-3 border-t pt-3">
-                    <p className="text-xs font-semibold text-gray-500 mb-2">{new Date(selectedDay + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
-                    <div className="space-y-1">
-                      {dayJobs.map(j => (
-                        <Link href={`/jobs/${j.id}`} key={j.id} className="flex justify-between items-center p-2 rounded-lg hover:bg-gray-50">
-                          <div>
-                            <span className="text-sm font-medium text-gray-800">{j.customers?.name}</span>
-                            {j.technician && <span className="text-xs text-gray-400 ml-2">— {j.technician}</span>}
-                          </div>
-                          <span className={j.status === 'complete' ? 'text-xs px-2 py-1 rounded-full bg-green-100 text-green-700' : 'text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700'}>{j.status}</span>
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                ) : <p className="mt-3 text-gray-400 text-sm text-center">No jobs on this day</p>
-              })()}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-                <div className="flex justify-between items-center mb-3">
-                  <h3 className="font-semibold text-gray-700">Today's Jobs</h3>
-                  <button onClick={() => setActiveTab('jobs')} className="text-blue-600 text-xs hover:underline">View all</button>
+                  })}
                 </div>
-                {todayJobs.length === 0 && <p className="text-gray-400 text-sm">No jobs scheduled today</p>}
-                <div className="space-y-2">
-                  {todayJobs.map(job => (
-                    <Link href={`/jobs/${job.id}`} key={job.id} className="flex justify-between items-center p-2 rounded-lg hover:bg-gray-50">
-                      <div>
-                        <div className="text-sm font-medium text-gray-800">{job.customers?.name}</div>
-                        <div className="text-xs text-gray-400">{job.customers?.address}</div>
-                      </div>
-                      <span className={job.status === 'complete' ? 'text-xs px-2 py-1 rounded-full bg-green-100 text-green-700' : 'text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700'}>{job.status}</span>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-                <div className="flex justify-between items-center mb-3">
-                  <h3 className="font-semibold text-gray-700">Unpaid Invoices</h3>
-                  <button onClick={() => setActiveTab('invoices')} className="text-blue-600 text-xs hover:underline">View all</button>
-                </div>
-                {unpaidInvoices.length === 0 && <p className="text-gray-400 text-sm">No unpaid invoices</p>}
-                <div className="space-y-2">
-                  {unpaidInvoices.map(inv => (
-                    <Link href={`/invoices/${inv.id}`} key={inv.id} className="flex justify-between items-center p-2 rounded-lg hover:bg-gray-50">
-                      <div>
-                        <div className="text-sm font-medium text-gray-800">{inv.customers?.name}</div>
-                        <div className="text-xs text-gray-400">Due: {inv.due_date || 'No due date'}</div>
-                      </div>
-                      <span className="text-sm font-semibold text-gray-800">${inv.amount}</span>
-                    </Link>
-                  ))}
-                </div>
-              </div>
+              )}
             </div>
           </div>
         )}
@@ -710,7 +812,7 @@ export default function Home() {
         {activeTab === 'customers' && (
           <div>
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-800">Customers</h2>
+              <h2 className="text-xl font-bold text-slate-800">Customers</h2>
               <button onClick={() => setShowCustomerForm(!showCustomerForm)} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">+ Add Customer</button>
             </div>
             {showCustomerForm && (
@@ -802,7 +904,7 @@ export default function Home() {
         {activeTab === 'jobs' && (
           <div>
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-800">Jobs</h2>
+              <h2 className="text-xl font-bold text-slate-800">Jobs</h2>
               <button onClick={() => setShowJobForm(!showJobForm)} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">+ Add Job</button>
             </div>
             {showJobForm && (
@@ -837,7 +939,7 @@ export default function Home() {
 
         {activeTab === 'route' && (
           <div>
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Daily Route</h2>
+            <h2 className="text-xl font-bold text-slate-800 mb-4">Daily Route</h2>
             <input type="date" className="w-full border rounded-xl p-3 text-gray-800 bg-white shadow-sm mb-3" value={routeDate} onChange={e => setRouteDate(e.target.value)} />
             {routeJobs.length >= 2 && (
               <button onClick={optimizeRoute} disabled={optimizing} className="w-full mb-2 bg-purple-600 text-white py-3 rounded-xl font-semibold text-sm">{optimizing ? 'Optimizing route...' : 'Optimize Route with AI'}</button>
@@ -872,7 +974,7 @@ export default function Home() {
 
         {activeTab === 'chemicals' && (
           <div>
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Chemical Logs</h2>
+            <h2 className="text-xl font-bold text-slate-800 mb-4">Chemical Logs</h2>
             <div className="space-y-3">
               {chemLogs.map(log => (
                 <div key={log.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
@@ -918,7 +1020,7 @@ export default function Home() {
 
         {activeTab === 'invoices' && (
           <div>
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Invoices</h2>
+            <h2 className="text-xl font-bold text-slate-800 mb-4">Invoices</h2>
             <div className="space-y-2">
               {invoices.map(inv => (
                 <Link href={`/invoices/${inv.id}`} key={inv.id} className="flex justify-between items-center bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition">
@@ -939,7 +1041,7 @@ export default function Home() {
 
         {activeTab === 'reports' && (
           <div>
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Chemical Reports</h2>
+            <h2 className="text-xl font-bold text-slate-800 mb-4">Chemical Reports</h2>
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
               <label className="text-gray-500 text-sm block mb-2">Select Customer</label>
@@ -1021,6 +1123,89 @@ export default function Home() {
           </div>
         )}
 
+        {activeTab === 'users' && (
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-slate-800">Manage Team</h2>
+              <button onClick={() => setShowTeamForm(!showTeamForm)} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">+ Invite Member</button>
+            </div>
+
+            {teamMessage && (
+              <div className={`rounded-xl p-3 mb-4 text-sm ${teamMessage.startsWith('Error') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+                {teamMessage}
+              </div>
+            )}
+
+            {showTeamForm && (
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 mb-6">
+                <h3 className="font-semibold text-slate-700 mb-4">New Team Member</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                  <input className="border border-slate-200 rounded-lg p-2.5 text-gray-800 bg-white text-sm" placeholder="Full Name *" value={teamForm.full_name} onChange={e => setTeamForm({ ...teamForm, full_name: e.target.value })} />
+                  <input className="border border-slate-200 rounded-lg p-2.5 text-gray-800 bg-white text-sm" placeholder="Email *" type="email" value={teamForm.email} onChange={e => setTeamForm({ ...teamForm, email: e.target.value })} />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                  <select className="border border-slate-200 rounded-lg p-2.5 text-gray-800 bg-white text-sm" value={teamForm.role} onChange={e => setTeamForm({ ...teamForm, role: e.target.value })}>
+                    <option value="technician">Technician</option>
+                    <option value="manager">Manager</option>
+                    <option value="owner">Owner</option>
+                  </select>
+                  <button onClick={sendTeamInvite} disabled={teamLoading} className="bg-emerald-600 text-white py-2.5 rounded-lg font-semibold text-sm disabled:opacity-50">{teamLoading ? 'Creating...' : 'Create Account'}</button>
+                </div>
+                <p className="text-xs text-slate-400">A temporary password will be generated — share it with them directly so they can log in.</p>
+              </div>
+            )}
+
+            {teamUsers.length === 0 && <p className="text-slate-400 text-sm text-center mt-12">No team members yet</p>}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {teamUsers.map(u => {
+                const jobStats = u.role === 'technician' ? (teamJobStats[u.full_name] || { scheduled: 0, completed: 0 }) : null
+                const initials = (u.full_name || '?').split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()
+                return (
+                  <div key={u.id} className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col gap-4">
+                    {/* Header: avatar + name + remove */}
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 font-bold text-sm flex-shrink-0">{initials}</div>
+                        <div>
+                          <div className="font-semibold text-slate-800 leading-tight">{u.full_name}</div>
+                          <div className="text-slate-400 text-xs mt-0.5 truncate max-w-[160px]">{u.email}</div>
+                        </div>
+                      </div>
+                      {u.id !== profile?.id && (
+                        <button onClick={() => removeTeamUser(u.id)} className="text-slate-300 hover:text-red-500 text-lg leading-none flex-shrink-0 hover:bg-red-50 w-7 h-7 flex items-center justify-center rounded-lg transition">✕</button>
+                      )}
+                    </div>
+
+                    {/* Role selector */}
+                    <select className="w-full border border-slate-200 rounded-lg p-2 text-sm text-gray-800 bg-white" value={u.role} onChange={e => updateTeamRole(u.id, e.target.value)}>
+                      <option value="technician">Technician</option>
+                      <option value="manager">Manager</option>
+                      <option value="owner">Owner</option>
+                    </select>
+
+                    {/* Job stats for technicians */}
+                    {jobStats && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-center">
+                          <div className="text-2xl font-bold text-blue-700 leading-none">{jobStats.scheduled}</div>
+                          <div className="text-xs text-blue-500 mt-1 font-medium">Scheduled</div>
+                        </div>
+                        <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-center">
+                          <div className="text-2xl font-bold text-emerald-700 leading-none">{jobStats.completed}</div>
+                          <div className="text-xs text-emerald-500 mt-1 font-medium">Completed</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+          </div>
+        </main>
       </div>
     </div>
   )

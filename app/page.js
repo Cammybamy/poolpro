@@ -80,6 +80,9 @@ export default function Home() {
   const [teamLoading, setTeamLoading] = useState(false)
   const [teamJobStats, setTeamJobStats] = useState({})
 
+  // Tech activity (live board)
+  const [techActivity, setTechActivity] = useState([])
+
   // Tech
   const [techTab, setTechTab] = useState('jobs')
   const [techTodayJobs, setTechTodayJobs] = useState([])
@@ -93,6 +96,12 @@ export default function Home() {
   useEffect(() => {
     loadProfile()
   }, [])
+
+  useEffect(() => {
+    if (!profile || activeTab !== 'dashboard') return
+    const interval = setInterval(fetchDashboard, 30000)
+    return () => clearInterval(interval)
+  }, [profile, activeTab])
 
   useEffect(() => {
     if (!profile) return
@@ -189,6 +198,21 @@ export default function Home() {
     setMonthlyRevenue(mrRes.data || [])
     const total = (fcRes.data || []).reduce((sum, c) => sum + (parseFloat(c.monthly_rate) || 0), 0)
     setForecast(total)
+
+    // Build tech activity: group today's jobs by technician
+    const allTodayJobs = tjRes.data || []
+    const byTech = {}
+    allTodayJobs.forEach(j => {
+      const name = j.technician || 'Unassigned'
+      if (!byTech[name]) byTech[name] = []
+      byTech[name].push(j)
+    })
+    const activity = Object.entries(byTech).map(([name, jobs]) => {
+      const done = jobs.filter(j => j.status === 'complete').length
+      const current = jobs.find(j => j.status !== 'complete') || null
+      return { name, total: jobs.length, done, current }
+    })
+    setTechActivity(activity)
   }
 
   async function fetchWeather() {
@@ -818,6 +842,50 @@ export default function Home() {
 
               </div>
             </div>
+
+            {/* Team Activity — live board */}
+            {techActivity.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="font-semibold text-slate-700 text-base">Team Activity Today</h3>
+                    <p className="text-xs text-slate-400 mt-0.5">Updates every 30 seconds</p>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-xs text-emerald-600 font-medium">Live</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {techActivity.map(tech => (
+                    <div key={tech.name} className="border border-slate-200 rounded-xl p-4 bg-slate-50">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                            {tech.name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()}
+                          </div>
+                          <span className="font-semibold text-slate-800 text-sm truncate">{tech.name}</span>
+                        </div>
+                        <span className="text-xs text-slate-400 flex-shrink-0">{tech.done}/{tech.total}</span>
+                      </div>
+                      {/* Progress bar */}
+                      <div className="w-full bg-slate-200 rounded-full h-1.5 mb-3">
+                        <div className="bg-emerald-500 h-1.5 rounded-full transition-all" style={{ width: `${tech.total > 0 ? Math.round((tech.done / tech.total) * 100) : 0}%` }} />
+                      </div>
+                      {tech.current ? (
+                        <div>
+                          <div className="text-xs text-slate-400 mb-0.5 uppercase tracking-wide font-medium">Currently at</div>
+                          <div className="text-sm font-semibold text-slate-800 truncate">{tech.current.customers?.name}</div>
+                          <div className="text-xs text-slate-500 truncate mt-0.5">{tech.current.customers?.address}</div>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-emerald-600 font-semibold">✓ All jobs complete</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Revenue — full width bar chart */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">

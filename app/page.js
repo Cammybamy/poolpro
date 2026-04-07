@@ -30,6 +30,8 @@ export default function Home() {
   const [calendarMonth, setCalendarMonth] = useState(new Date())
   const [calendarJobs, setCalendarJobs] = useState([])
   const [selectedDay, setSelectedDay] = useState(null)
+  const [showCalendarJobForm, setShowCalendarJobForm] = useState(false)
+  const [calJobForm, setCalJobForm] = useState({ customer_id: '', technician: '', notes: '' })
 
   // Customers
   const [customers, setCustomers] = useState([])
@@ -94,7 +96,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!profile) return
-    if (activeTab === 'dashboard') { fetchDashboard(); fetchWeather(); fetchCalendarJobs(calendarMonth) }
+    if (activeTab === 'dashboard') { fetchDashboard(); fetchWeather(); fetchCalendarJobs(calendarMonth); fetchCustomers(); fetchTechnicians() }
     if (activeTab === 'customers') fetchCustomers()
     if (activeTab === 'jobs') { fetchJobs(); fetchCustomers(); fetchTechnicians() }
     if (activeTab === 'route') fetchRouteJobs(routeDate)
@@ -221,6 +223,15 @@ export default function Home() {
       setWeatherError(`Failed to load weather: ${e.message}`)
     }
     setWeatherLoading(false)
+  }
+
+  async function addCalendarJob() {
+    if (!calJobForm.customer_id) return
+    await supabase.from('jobs').insert([{ ...calJobForm, scheduled_date: selectedDay, status: 'pending' }])
+    setCalJobForm({ customer_id: '', technician: '', notes: '' })
+    setShowCalendarJobForm(false)
+    fetchCalendarJobs(calendarMonth)
+    fetchDashboard()
   }
 
   async function fetchCalendarJobs(month) {
@@ -604,60 +615,68 @@ export default function Home() {
           <div className="max-w-7xl mx-auto">
 
         {activeTab === 'dashboard' && (
-          <div>
+          <div className="space-y-4">
+
             {/* Header */}
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-bold text-slate-800">{profile.companies?.name}</h2>
-                <p className="text-slate-400 text-sm">{today} · <span className="capitalize">{profile.role}</span></p>
+                <h2 className="text-2xl font-bold text-slate-800">{profile.companies?.name}</h2>
+                <p className="text-slate-400 text-sm mt-0.5">{today} · <span className="capitalize">{profile.role}</span></p>
               </div>
               <div className="text-right hidden md:block">
-                <div className="text-xs text-slate-400">Monthly Forecast</div>
-                <div className="text-2xl font-bold text-emerald-600">${forecast.toFixed(2)}</div>
+                <div className="text-xs text-slate-400 uppercase tracking-wide">Monthly Forecast</div>
+                <div className="text-3xl font-bold text-emerald-600">${forecast.toFixed(2)}</div>
               </div>
             </div>
 
             {/* Stat Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {[
-                { value: stats.todayJobs, label: "Jobs Today", color: "text-blue-700", bg: "bg-blue-50", border: "border-blue-100", tab: 'jobs' },
-                { value: stats.pendingJobs, label: "Pending", color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-100", tab: 'jobs' },
-                { value: stats.customers, label: "Customers", color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-100", tab: 'customers' },
-                { value: stats.unpaidInvoices, label: "Unpaid Invoices", color: "text-rose-700", bg: "bg-rose-50", border: "border-rose-100", tab: 'invoices' },
+                { value: stats.todayJobs, label: 'Jobs Today', color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-100', tab: 'jobs' },
+                { value: stats.pendingJobs, label: 'Pending', color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-100', tab: 'jobs' },
+                { value: stats.customers, label: 'Customers', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-100', tab: 'customers' },
+                { value: stats.unpaidInvoices, label: 'Unpaid Invoices', color: 'text-rose-700', bg: 'bg-rose-50', border: 'border-rose-100', tab: 'invoices' },
               ].map(s => (
                 <button key={s.label} onClick={() => setActiveTab(s.tab)}
-                  className={`bg-white rounded-xl border ${s.border} shadow-sm p-4 flex items-center gap-3 hover:shadow-md transition text-left`}>
-                  <div className={`${s.bg} rounded-lg p-2 flex-shrink-0`}>
-                    <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
+                  className={`bg-white rounded-xl border ${s.border} shadow-sm p-5 flex items-center gap-4 hover:shadow-md transition text-left`}>
+                  <div className={`${s.bg} rounded-xl p-3 flex-shrink-0`}>
+                    <div className={`text-3xl font-bold ${s.color}`}>{s.value}</div>
                   </div>
-                  <div className="text-sm text-slate-500 font-medium">{s.label}</div>
+                  <div className="text-base text-slate-500 font-medium">{s.label}</div>
                 </button>
               ))}
             </div>
 
-            {/* Main Grid: Calendar + Right Panel */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+            {/* Main Grid: Calendar (left) + Right Panel */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
-              {/* Calendar — takes 2/3 */}
-              <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-                <div className="flex justify-between items-center mb-3">
-                  <h3 className="font-semibold text-slate-700">{calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h3>
+              {/* Calendar — 2/3 */}
+              <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                <div className="flex justify-between items-center mb-4">
+                  <div>
+                    <h3 className="font-semibold text-slate-700 text-base">{calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h3>
+                    {weatherCity && <p className="text-xs text-slate-400 mt-0.5">{weatherCity}</p>}
+                  </div>
                   <div className="flex gap-1">
-                    <button onClick={() => { const m = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1); setCalendarMonth(m); fetchCalendarJobs(m) }} className="text-gray-400 hover:text-blue-600 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-50 text-lg">‹</button>
-                    <button onClick={() => { const m = new Date(); setCalendarMonth(m); fetchCalendarJobs(m) }} className="text-xs text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-50">Today</button>
-                    <button onClick={() => { const m = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1); setCalendarMonth(m); fetchCalendarJobs(m) }} className="text-gray-400 hover:text-blue-600 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-50 text-lg">›</button>
+                    <button onClick={() => { const m = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1); setCalendarMonth(m); fetchCalendarJobs(m) }} className="text-slate-400 hover:text-blue-600 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-50 text-xl">‹</button>
+                    <button onClick={() => { const m = new Date(); setCalendarMonth(m); fetchCalendarJobs(m) }} className="text-sm text-blue-600 px-3 py-1 rounded-lg hover:bg-blue-50 font-medium">Today</button>
+                    <button onClick={() => { const m = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1); setCalendarMonth(m); fetchCalendarJobs(m) }} className="text-slate-400 hover:text-blue-600 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-50 text-xl">›</button>
                   </div>
                 </div>
-                <div className="grid grid-cols-7 mb-1">
-                  {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => <div key={d} className="text-center text-xs font-semibold text-gray-400 py-1">{d}</div>)}
+                <div className="grid grid-cols-7 mb-2">
+                  {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
+                    <div key={d} className="text-center text-xs font-semibold text-slate-400 py-1">{d}</div>
+                  ))}
                 </div>
-                <div className="grid grid-cols-7 gap-0.5">
+                <div className="grid grid-cols-7 gap-1">
                   {(() => {
                     const year = calendarMonth.getFullYear()
                     const month = calendarMonth.getMonth()
                     const firstDay = new Date(year, month, 1).getDay()
                     const daysInMonth = new Date(year, month + 1, 0).getDate()
                     const todayStr = new Date().toISOString().split('T')[0]
+                    const weatherEmoji = { Clear: '☀️', Clouds: '⛅', Rain: '🌧️', Drizzle: '🌦️', Thunderstorm: '⛈️', Snow: '❄️', Mist: '🌫️', Fog: '🌫️', Haze: '🌫️' }
+                    const weatherByDate = Object.fromEntries(weather.map(d => [d.date, d]))
                     const cells = []
                     for (let i = 0; i < firstDay; i++) cells.push(<div key={`e${i}`} />)
                     for (let d = 1; d <= daysInMonth; d++) {
@@ -665,12 +684,22 @@ export default function Home() {
                       const dayJobs = calendarJobs.filter(j => j.scheduled_date === dateStr)
                       const isToday = dateStr === todayStr
                       const isSelected = selectedDay === dateStr
+                      const wx = weatherByDate[dateStr]
                       cells.push(
-                        <button key={d} onClick={() => setSelectedDay(isSelected ? null : dateStr)}
-                          className={`rounded-lg p-1 text-center transition aspect-square flex flex-col items-center justify-center ${isToday ? 'bg-blue-600 text-white' : isSelected ? 'bg-blue-50 border border-blue-300' : 'hover:bg-gray-50'}`}>
-                          <div className={`text-xs font-semibold leading-none ${isToday ? 'text-white' : 'text-gray-700'}`}>{d}</div>
+                        <button key={d}
+                          onClick={() => { setSelectedDay(isSelected ? null : dateStr); setShowCalendarJobForm(false); setCalJobForm({ customer_id: '', technician: '', notes: '' }) }}
+                          className={`rounded-xl p-1.5 text-center transition flex flex-col items-center justify-start min-h-[88px] ${isToday ? 'bg-blue-600 text-white' : isSelected ? 'bg-blue-50 border-2 border-blue-400' : 'hover:bg-slate-50 border border-transparent'}`}>
+                          <div className={`text-sm font-bold leading-none mt-1 ${isToday ? 'text-white' : 'text-slate-700'}`}>{d}</div>
+                          {wx && (
+                            <>
+                              <div className="text-base leading-none mt-1.5">{weatherEmoji[wx.condition] || '🌤️'}</div>
+                              <div className={`text-xs font-semibold leading-none mt-0.5 ${isToday ? 'text-blue-100' : 'text-slate-400'}`}>{wx.high}°</div>
+                            </>
+                          )}
                           {dayJobs.length > 0 && (
-                            <div className={`text-xs font-bold leading-none mt-0.5 ${isToday ? 'text-blue-100' : 'text-blue-600'}`}>{dayJobs.length}</div>
+                            <div className={`text-xs font-bold leading-none mt-1 px-1.5 py-0.5 rounded-full ${isToday ? 'bg-blue-500 text-blue-100' : 'bg-blue-100 text-blue-700'}`}>
+                              {dayJobs.length} job{dayJobs.length > 1 ? 's' : ''}
+                            </div>
                           )}
                         </button>
                       )
@@ -678,86 +707,134 @@ export default function Home() {
                     return cells
                   })()}
                 </div>
-                {selectedDay && (() => {
-                  const dayJobs = calendarJobs.filter(j => j.scheduled_date === selectedDay)
-                  return (
-                    <div className="mt-3 border-t pt-3">
-                      <p className="text-xs font-semibold text-gray-500 mb-2">{new Date(selectedDay + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
-                      {dayJobs.length === 0 ? <p className="text-gray-400 text-sm">No jobs</p> : (
-                        <div className="space-y-1">
-                          {dayJobs.map(j => (
-                            <Link href={`/jobs/${j.id}`} key={j.id} className="flex justify-between items-center p-2 rounded-lg hover:bg-gray-50">
-                              <div>
-                                <span className="text-sm font-medium text-gray-800">{j.customers?.name}</span>
-                                {j.technician && <span className="text-xs text-gray-400 ml-2">— {j.technician}</span>}
-                              </div>
-                              <span className={j.status === 'complete' ? 'text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700' : 'text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700'}>{j.status}</span>
-                            </Link>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })()}
               </div>
 
-              {/* Right column: Today's Jobs + Unpaid Invoices */}
+              {/* Right column */}
               <div className="flex flex-col gap-4">
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex-1">
+
+                {/* Scheduled Jobs — updates when date is clicked */}
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex-1">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h3 className="font-semibold text-slate-700">Scheduled Jobs</h3>
+                      {selectedDay
+                        ? <p className="text-xs text-slate-400 mt-0.5">{new Date(selectedDay + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+                        : <p className="text-xs text-slate-400 mt-0.5">Click a date to view jobs</p>
+                      }
+                    </div>
+                    {selectedDay && (
+                      <button onClick={() => setShowCalendarJobForm(f => !f)}
+                        className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-blue-700 transition">
+                        + Schedule
+                      </button>
+                    )}
+                  </div>
+
+                  {selectedDay && showCalendarJobForm && (
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 space-y-2">
+                      <select className="w-full border border-slate-200 rounded-lg p-2 text-sm text-gray-800 bg-white" value={calJobForm.customer_id} onChange={e => setCalJobForm({ ...calJobForm, customer_id: e.target.value })}>
+                        <option value="">Select Customer *</option>
+                        {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                      <select className="w-full border border-slate-200 rounded-lg p-2 text-sm text-gray-800 bg-white" value={calJobForm.technician} onChange={e => setCalJobForm({ ...calJobForm, technician: e.target.value })}>
+                        <option value="">Unassigned</option>
+                        {technicians.map(t => <option key={t.id} value={t.full_name}>{t.full_name}</option>)}
+                      </select>
+                      <textarea className="w-full border border-slate-200 rounded-lg p-2 text-sm text-gray-800 bg-white resize-none" placeholder="Notes (optional)" rows={2} value={calJobForm.notes} onChange={e => setCalJobForm({ ...calJobForm, notes: e.target.value })} />
+                      <div className="flex gap-2">
+                        <button onClick={addCalendarJob} className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 transition">Save Job</button>
+                        <button onClick={() => { setShowCalendarJobForm(false); setCalJobForm({ customer_id: '', technician: '', notes: '' }) }} className="px-3 py-2 rounded-lg text-sm text-slate-500 hover:bg-slate-200 transition">Cancel</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {!selectedDay && (
+                    <div className="flex flex-col items-center justify-center py-10 text-center">
+                      <div className="text-4xl mb-2">📅</div>
+                      <p className="text-slate-400 text-sm">Select a date on the calendar to see or schedule jobs</p>
+                    </div>
+                  )}
+
+                  {selectedDay && (() => {
+                    const dayJobs = calendarJobs.filter(j => j.scheduled_date === selectedDay)
+                    if (dayJobs.length === 0 && !showCalendarJobForm) return <p className="text-slate-400 text-sm text-center py-4">No jobs scheduled — click + Schedule to add one.</p>
+                    return (
+                      <div className="space-y-2">
+                        {dayJobs.map(j => (
+                          <Link href={`/jobs/${j.id}`} key={j.id} className="flex justify-between items-center p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition border border-slate-100">
+                            <div>
+                              <div className="text-sm font-semibold text-slate-800">{j.customers?.name}</div>
+                              {j.technician && <div className="text-xs text-slate-400 mt-0.5">{j.technician}</div>}
+                            </div>
+                            <span className={`text-xs px-2 py-1 rounded-full font-medium ${j.status === 'complete' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{j.status}</span>
+                          </Link>
+                        ))}
+                      </div>
+                    )
+                  })()}
+                </div>
+
+                {/* Today's Jobs */}
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
                   <div className="flex justify-between items-center mb-3">
                     <h3 className="font-semibold text-slate-700">Today's Jobs</h3>
-                    <button onClick={() => setActiveTab('jobs')} className="text-blue-600 text-xs hover:underline">View all</button>
+                    <button onClick={() => setActiveTab('jobs')} className="text-blue-600 text-xs hover:underline font-medium">View all</button>
                   </div>
                   {todayJobs.length === 0 ? <p className="text-slate-400 text-sm">No jobs today</p> : (
-                    <div className="space-y-1.5 overflow-y-auto max-h-48">
+                    <div className="space-y-2 overflow-y-auto max-h-44">
                       {todayJobs.map(job => (
-                        <Link href={`/jobs/${job.id}`} key={job.id} className="flex justify-between items-center p-2 rounded-lg hover:bg-gray-50">
+                        <Link href={`/jobs/${job.id}`} key={job.id} className="flex justify-between items-center p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition">
                           <div className="min-w-0">
-                            <div className="text-sm font-medium text-gray-800 truncate">{job.customers?.name}</div>
-                            <div className="text-xs text-gray-400 truncate">{job.technician || 'Unassigned'}</div>
+                            <div className="text-sm font-semibold text-slate-800 truncate">{job.customers?.name}</div>
+                            <div className="text-xs text-slate-400 mt-0.5 truncate">{job.technician || 'Unassigned'}</div>
                           </div>
-                          <span className={`ml-2 flex-shrink-0 text-xs px-2 py-0.5 rounded-full ${job.status === 'complete' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{job.status}</span>
+                          <span className={`ml-2 flex-shrink-0 text-xs px-2 py-1 rounded-full font-medium ${job.status === 'complete' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{job.status}</span>
                         </Link>
                       ))}
                     </div>
                   )}
                 </div>
 
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex-1">
+                {/* Unpaid Invoices */}
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
                   <div className="flex justify-between items-center mb-3">
                     <h3 className="font-semibold text-slate-700">Unpaid Invoices</h3>
-                    <button onClick={() => setActiveTab('invoices')} className="text-blue-600 text-xs hover:underline">View all</button>
+                    <button onClick={() => setActiveTab('invoices')} className="text-blue-600 text-xs hover:underline font-medium">View all</button>
                   </div>
                   {unpaidInvoices.length === 0 ? <p className="text-slate-400 text-sm">All clear</p> : (
-                    <div className="space-y-1.5 overflow-y-auto max-h-48">
+                    <div className="space-y-2 overflow-y-auto max-h-44">
                       {unpaidInvoices.map(inv => (
-                        <Link href={`/invoices/${inv.id}`} key={inv.id} className="flex justify-between items-center p-2 rounded-lg hover:bg-gray-50">
+                        <Link href={`/invoices/${inv.id}`} key={inv.id} className="flex justify-between items-center p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition">
                           <div className="min-w-0">
-                            <div className="text-sm font-medium text-gray-800 truncate">{inv.customers?.name}</div>
-                            <div className="text-xs text-gray-400">Due: {inv.due_date || '—'}</div>
+                            <div className="text-sm font-semibold text-slate-800 truncate">{inv.customers?.name}</div>
+                            <div className="text-xs text-slate-400 mt-0.5">Due: {inv.due_date || '—'}</div>
                           </div>
-                          <span className="ml-2 flex-shrink-0 text-sm font-semibold text-gray-800">${inv.amount}</span>
+                          <span className="ml-2 flex-shrink-0 text-base font-bold text-slate-800">${inv.amount}</span>
                         </Link>
                       ))}
                     </div>
                   )}
                 </div>
+
               </div>
             </div>
 
-            {/* Revenue — full width */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-4">
-              <div className="flex items-center justify-between mb-5">
-                <h3 className="font-semibold text-slate-700 text-base">Revenue — Last 6 Months</h3>
+            {/* Revenue — full width bar chart */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+              <div className="flex justify-between items-center mb-4">
+                <div>
+                  <h3 className="font-semibold text-slate-700 text-base">Revenue — Last 6 Months</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Collected vs. potential</p>
+                </div>
                 {monthlyRevenue.length > 0 && (
                   <div className="text-right">
-                    <div className="text-xs text-slate-400">Total Collected</div>
-                    <div className="text-lg font-bold text-emerald-600">${monthlyRevenue.reduce((s, r) => s + Number(r.actual), 0).toFixed(0)}</div>
+                    <div className="text-xs text-slate-400 uppercase tracking-wide">6-mo collected</div>
+                    <div className="text-2xl font-bold text-emerald-600">${monthlyRevenue.reduce((s, r) => s + Number(r.actual), 0).toFixed(0)}</div>
                   </div>
                 )}
               </div>
               {monthlyRevenue.length === 0 ? <p className="text-slate-400 text-sm">No invoice data yet</p> : (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {monthlyRevenue.map((row, i) => {
                     const month = new Date(row.month).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
                     const pct = row.potential > 0 ? Math.round((row.actual / row.potential) * 100) : 0
@@ -765,14 +842,14 @@ export default function Home() {
                       <div key={i}>
                         <div className="flex justify-between items-baseline mb-1.5">
                           <span className="text-sm font-medium text-slate-600">{month}</span>
-                          <div className="text-right">
+                          <div className="flex items-center gap-2">
                             <span className="text-base font-bold text-slate-800">${Number(row.actual).toFixed(0)}</span>
-                            <span className="text-sm text-slate-400 ml-1">/ ${Number(row.potential).toFixed(0)}</span>
-                            <span className={`ml-2 text-xs font-semibold px-1.5 py-0.5 rounded-full ${pct >= 80 ? 'bg-emerald-100 text-emerald-700' : pct >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>{pct}%</span>
+                            <span className="text-sm text-slate-400">/ ${Number(row.potential).toFixed(0)}</span>
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${pct >= 80 ? 'bg-emerald-100 text-emerald-700' : pct >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>{pct}%</span>
                           </div>
                         </div>
                         <div className="w-full bg-slate-100 rounded-full h-3">
-                          <div className={`h-3 rounded-full transition-all ${pct >= 80 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-400' : 'bg-rose-400'}`} style={{ width: `${pct}%` }}></div>
+                          <div className={`h-3 rounded-full transition-all ${pct >= 80 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-400' : 'bg-rose-400'}`} style={{ width: `${pct}%` }} />
                         </div>
                       </div>
                     )
@@ -781,31 +858,6 @@ export default function Home() {
               )}
             </div>
 
-            {/* Weather — full width compact */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-              <h3 className="font-semibold text-slate-700 mb-3 text-sm">
-                Weather {weatherCity && <span className="text-slate-400 font-normal">— {weatherCity}</span>}
-              </h3>
-              {weatherLoading && <p className="text-slate-400 text-sm text-center py-2">Loading...</p>}
-              {weatherError && <p className="text-red-400 text-sm">{weatherError}</p>}
-              {weather.length > 0 && (
-                <div className="grid grid-cols-7 gap-2">
-                  {weather.map((day, i) => {
-                    const d = new Date(day.date + 'T12:00:00')
-                    const label = i === 0 ? 'Today' : d.toLocaleDateString('en-US', { weekday: 'short' })
-                    const emoji = { Clear: '☀️', Clouds: '⛅', Rain: '🌧️', Drizzle: '🌦️', Thunderstorm: '⛈️', Snow: '❄️', Mist: '🌫️', Fog: '🌫️', Haze: '🌫️' }[day.condition] || '🌤️'
-                    return (
-                      <div key={day.date} className={`text-center rounded-xl p-2 ${i === 0 ? 'bg-blue-50 border border-blue-100' : 'bg-slate-50'}`}>
-                        <div className="text-xs font-semibold text-slate-500 mb-1">{label}</div>
-                        <div className="text-xl mb-1">{emoji}</div>
-                        <div className="text-sm font-bold text-slate-800">{day.high}°</div>
-                        <div className="text-xs text-slate-400">{day.low}°</div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
           </div>
         )}
 

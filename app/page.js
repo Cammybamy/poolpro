@@ -35,7 +35,7 @@ export default function Home() {
 
   // Customers
   const [customers, setCustomers] = useState([])
-  const [customerForm, setCustomerForm] = useState({ name: '', address: '', phone: '', email: '', notes: '', service_frequency: 'none', monthly_rate: '', pool_size_gallons: '', pool_type: '', filter_type: '', equipment_brand: '', equipment_notes: '' })
+  const [customerForm, setCustomerForm] = useState({ name: '', address: '', phone: '', email: '', notes: '', service_frequency: 'none', service_start_date: '', default_technician: '', monthly_rate: '', pool_size_gallons: '', pool_type: '', filter_type: '', equipment_brand: '', equipment_notes: '' })
   const [showCustomerForm, setShowCustomerForm] = useState(false)
   const [customerError, setCustomerError] = useState('')
   const [newCustomerPhotos, setNewCustomerPhotos] = useState([])
@@ -106,9 +106,9 @@ export default function Home() {
   useEffect(() => {
     if (!profile) return
     if (activeTab === 'dashboard') { fetchDashboard(); fetchWeather(); fetchCalendarJobs(calendarMonth); fetchCustomers(); fetchTechnicians() }
-    if (activeTab === 'customers') fetchCustomers()
+    if (activeTab === 'customers') { fetchCustomers(); fetchTechnicians() }
     if (activeTab === 'jobs') { fetchJobs(); fetchCustomers(); fetchTechnicians() }
-    if (activeTab === 'route') fetchRouteJobs(routeDate)
+    if (activeTab === 'route') { fetchRouteJobs(routeDate); fetchTechnicians() }
     if (activeTab === 'chemicals') fetchChemicals()
     if (activeTab === 'invoices') fetchInvoices()
     if (activeTab === 'reports') fetchReportCustomers()
@@ -301,7 +301,19 @@ export default function Home() {
       }
       setNewCustomerUploading(false)
     }
-    setCustomerForm({ name: '', address: '', phone: '', email: '', notes: '', service_frequency: 'none', monthly_rate: '', pool_size_gallons: '', pool_type: '', filter_type: '', equipment_brand: '', equipment_notes: '' })
+    if (newCust && customerForm.service_frequency !== 'none' && customerForm.service_start_date) {
+      await fetch('/api/generate-recurring-jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_id: newCust.id,
+          frequency: customerForm.service_frequency,
+          start_date: customerForm.service_start_date,
+          technician: customerForm.default_technician || null,
+        })
+      })
+    }
+    setCustomerForm({ name: '', address: '', phone: '', email: '', notes: '', service_frequency: 'none', service_start_date: '', default_technician: '', monthly_rate: '', pool_size_gallons: '', pool_type: '', filter_type: '', equipment_brand: '', equipment_notes: '' })
     setNewCustomerPhotos([])
     setShowCustomerForm(false)
     fetchCustomers()
@@ -360,6 +372,11 @@ export default function Home() {
     newJobs[swapIndex] = temp
     await Promise.all(newJobs.map((job, i) => supabase.from('jobs').update({ route_order: i }).eq('id', job.id)))
     setRouteJobs(newJobs)
+  }
+
+  async function reassignJob(jobId, newTechnician) {
+    await supabase.from('jobs').update({ technician: newTechnician || null }).eq('id', jobId)
+    fetchRouteJobs(routeDate)
   }
 
   async function fetchChemicals() {
@@ -960,6 +977,22 @@ export default function Home() {
                   <option value="monthly">Monthly</option>
                 </select>
 
+                {customerForm.service_frequency !== 'none' && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-gray-500 text-xs block mb-1">Service Start Date</label>
+                      <input type="date" className="w-full border rounded-lg p-2 text-gray-800 bg-white" value={customerForm.service_start_date || ''} onChange={e => setCustomerForm({...customerForm, service_start_date: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="text-gray-500 text-xs block mb-1">Default Technician</label>
+                      <select className="w-full border rounded-lg p-2 text-gray-800 bg-white" value={customerForm.default_technician || ''} onChange={e => setCustomerForm({...customerForm, default_technician: e.target.value})}>
+                        <option value="">Unassigned</option>
+                        {technicians.map(t => <option key={t.id} value={t.full_name}>{t.full_name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                )}
+
                 <select className="w-full border rounded-lg p-2 text-gray-800 bg-white" value={customerForm.pool_type || ''} onChange={e => setCustomerForm({...customerForm, pool_type: e.target.value})}>
                   <option value="">Select pool type</option>
                   <option value="Gunite">Gunite</option>
@@ -1057,40 +1090,80 @@ export default function Home() {
           </div>
         )}
 
-        {activeTab === 'route' && (
-          <div>
-            <h2 className="text-xl font-bold text-slate-800 mb-4">Daily Route</h2>
-            <input type="date" className="w-full border rounded-xl p-3 text-gray-800 bg-white shadow-sm mb-3" value={routeDate} onChange={e => setRouteDate(e.target.value)} />
-            {routeJobs.length >= 2 && (
-              <button onClick={optimizeRoute} disabled={optimizing} className="w-full mb-2 bg-purple-600 text-white py-3 rounded-xl font-semibold text-sm">{optimizing ? 'Optimizing route...' : 'Optimize Route with AI'}</button>
-            )}
-            {optimizeError && <p className="text-red-500 text-sm text-center mb-3">{optimizeError}</p>}
-            {routeJobs.length === 0 && <p className="text-center text-gray-400 mt-8">No jobs scheduled for this day</p>}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-              {routeJobs.map((job, index) => (
-                <div key={job.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 flex items-center gap-3">
-                  <div className="flex flex-col gap-0.5">
-                    <button onClick={() => moveJob(index, -1)} className="text-gray-400 hover:text-blue-600 text-base leading-none">▲</button>
-                    <button onClick={() => moveJob(index, 1)} className="text-gray-400 hover:text-blue-600 text-base leading-none">▼</button>
-                  </div>
-                  <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">{index + 1}</div>
-                  <div className="flex-1 min-w-0">
-                    <Link href={`/jobs/${job.id}`} className="font-semibold text-gray-800 hover:text-blue-600 text-sm block truncate">{job.customers?.name}</Link>
-                    <div className="text-gray-500 text-xs truncate">{job.customers?.address}</div>
-                    {job.technician && <div className="text-gray-400 text-xs truncate">Tech: {job.technician}</div>}
-                    {routeDriveTimes[index] != null && index < routeJobs.length - 1 && (
-                      <div className="mt-1 flex items-center gap-1">
-                        <span className="text-blue-400 text-xs">🚗</span>
-                        <span className="text-blue-600 text-xs font-medium">{routeDriveTimes[index]} min to next</span>
+        {activeTab === 'route' && (() => {
+          // Group routeJobs by technician
+          const techGroups = {}
+          routeJobs.forEach((job, index) => {
+            const tech = job.technician || 'Unassigned'
+            if (!techGroups[tech]) techGroups[tech] = []
+            techGroups[tech].push({ ...job, _globalIndex: index })
+          })
+          const techNames = Object.keys(techGroups).sort((a, b) => a === 'Unassigned' ? 1 : b === 'Unassigned' ? -1 : a.localeCompare(b))
+          return (
+            <div>
+              <h2 className="text-xl font-bold text-slate-800 mb-4">Daily Route</h2>
+              <input type="date" className="w-full border rounded-xl p-3 text-gray-800 bg-white shadow-sm mb-3" value={routeDate} onChange={e => setRouteDate(e.target.value)} />
+              {routeJobs.length >= 2 && (
+                <button onClick={optimizeRoute} disabled={optimizing} className="w-full mb-2 bg-purple-600 text-white py-3 rounded-xl font-semibold text-sm">{optimizing ? 'Optimizing route...' : 'Optimize Route with AI'}</button>
+              )}
+              {optimizeError && <p className="text-red-500 text-sm text-center mb-3">{optimizeError}</p>}
+              {routeJobs.length === 0 && <p className="text-center text-gray-400 mt-8">No jobs scheduled for this day</p>}
+              <div className="space-y-6">
+                {techNames.map(techName => {
+                  const jobs = techGroups[techName]
+                  const initials = techName === 'Unassigned' ? '?' : techName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+                  const done = jobs.filter(j => j.status === 'complete').length
+                  return (
+                    <div key={techName}>
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">{initials}</div>
+                        <div>
+                          <div className="font-semibold text-slate-800">{techName}</div>
+                          <div className="text-xs text-gray-400">{jobs.length} stop{jobs.length !== 1 ? 's' : ''} · {done} completed</div>
+                        </div>
                       </div>
-                    )}
-                  </div>
-                  <span className={job.status === 'complete' ? 'text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 flex-shrink-0' : 'text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 flex-shrink-0'}>{job.status}</span>
-                </div>
-              ))}
+                      <div className="space-y-2 pl-12">
+                        {jobs.map((job, localIndex) => {
+                          const globalIndex = job._globalIndex
+                          return (
+                            <div key={job.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 flex items-center gap-3">
+                              <div className="flex flex-col gap-0.5">
+                                <button onClick={() => moveJob(globalIndex, -1)} className="text-gray-400 hover:text-blue-600 text-base leading-none">▲</button>
+                                <button onClick={() => moveJob(globalIndex, 1)} className="text-gray-400 hover:text-blue-600 text-base leading-none">▼</button>
+                              </div>
+                              <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-xs flex-shrink-0">{globalIndex + 1}</div>
+                              <div className="flex-1 min-w-0">
+                                <Link href={`/jobs/${job.id}`} className="font-semibold text-gray-800 hover:text-blue-600 text-sm block truncate">{job.customers?.name}</Link>
+                                <div className="text-gray-500 text-xs truncate">{job.customers?.address}</div>
+                                {routeDriveTimes[globalIndex] != null && globalIndex < routeJobs.length - 1 && (
+                                  <div className="mt-0.5 flex items-center gap-1">
+                                    <span className="text-blue-400 text-xs">🚗</span>
+                                    <span className="text-blue-600 text-xs font-medium">{routeDriveTimes[globalIndex]} min to next</span>
+                                  </div>
+                                )}
+                                <div className="mt-1">
+                                  <select
+                                    className="text-xs border border-gray-200 rounded-lg px-2 py-1 text-gray-700 bg-white"
+                                    value={job.technician || ''}
+                                    onChange={e => reassignJob(job.id, e.target.value)}
+                                  >
+                                    <option value="">Unassigned</option>
+                                    {technicians.map(t => <option key={t.id} value={t.full_name}>{t.full_name}</option>)}
+                                  </select>
+                                </div>
+                              </div>
+                              <span className={job.status === 'complete' ? 'text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 flex-shrink-0' : 'text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 flex-shrink-0'}>{job.status}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
-          </div>
-        )}
+          )
+        })()}
 
         {activeTab === 'chemicals' && (
           <div>
